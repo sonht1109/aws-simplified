@@ -1,3 +1,0 @@
-Build a website to learn AWS. totally 40 contents extract from 40 youtube videos. Turn into a website. Each content will be a page, each page should allow to go next/prev. Have a index page showing all pages. If possible, in each page demo by image/svg and interactive example (dont add if it doesnt make sense or hard to describe). Use simple tech terms so that its easy to understand. Each page can have content from other page so do not duplicate if content is explained in other pages. regarding UI design, decide it. color theme, can inherit AWS.
-
-Must have footer noted in index page that, this is ai-generated content
