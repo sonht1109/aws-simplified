@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudFront: Content Delivery Network · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="21">
+<main class="wrap">
+  <header class="page-head">
+    <h1>CloudFront: Content Delivery Network</h1>
+    <p class="lead">Learn what a CDN is, why every big website uses one, and how to put CloudFront in front of a private S3 bucket so users worldwide get your content fast without ever touching the bucket directly.</p>
+  </header>
+
+  <h2>The problem: far away means slow</h2>
+  <p>Picture a photo-sharing app. Someone in Australia uploads a photo, and the app stores it in one central place, say a storage system in North Virginia (US). Now a friend in India opens the app to see it.</p>
+  <p>Without any help, the friend's request has to cross the world and back:</p>
+  <ul>
+    <li>The request jumps through many <strong>routers</strong> on the internet. Each jump is called a <strong>hop</strong>.</li>
+    <li>More hops and more distance mean more <strong>latency</strong>, which is the waiting time before data arrives.</li>
+    <li>People near Virginia get photos instantly. People in India, Europe or South America see spinners and buffering.</li>
+  </ul>
+  <p>For apps like Instagram, YouTube or Amazon.com, that slow experience is not acceptable. The fix is a <strong>CDN</strong>.</p>
+
+  <h2>What is a CDN?</h2>
+  <p>A <strong>CDN (Content Delivery Network)</strong> is a worldwide network of servers that keep <em>copies</em> of your content close to your users. You use CDNs every day: every time a reel, product photo or video loads quickly, a CDN is probably serving it.</p>
+  <ul>
+    <li><strong>Origin:</strong> the "real" home of your content. It could be an S3 bucket, a load balancer, API Gateway, or any web server.</li>
+    <li><strong>Edge location:</strong> a CDN data center in a city near your users (Mumbai, Frankfurt, Toronto…). AWS has hundreds of them, many more than it has regions.</li>
+    <li><strong>Cache:</strong> the stored copy at the edge. When the edge already has the file, it can answer immediately.</li>
+  </ul>
+  <p><strong>Amazon CloudFront</strong> is AWS's managed CDN service. You tell it where your origin is, and it handles the worldwide edge network for you.</p>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A popular book with one copy in a central library. Instead of everyone travelling to that library, the publisher puts copies in every neighbourhood bookshop. The first reader in a neighbourhood may have to wait while a copy is shipped in, but everyone after that picks it up around the corner.</div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 345" role="img" aria-label="Users in Delhi and Toronto reach nearby CloudFront edge locations, which fetch from a private S3 bucket origin only on a cache miss">
+      <defs><marker id="arr21a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker>
+      <marker id="arr21b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--orange)"/></marker></defs>
+      <!-- users -->
+      <rect class="s-box2" x="20" y="40" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="85" y="64" text-anchor="middle">User</text>
+      <text class="s-text-s" x="85" y="82" text-anchor="middle">New Delhi</text>
+      <rect class="s-box2" x="20" y="230" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="85" y="254" text-anchor="middle">User</text>
+      <text class="s-text-s" x="85" y="272" text-anchor="middle">Toronto</text>
+      <!-- edges -->
+      <rect class="s-orange-soft" x="215" y="34" width="160" height="68" rx="8"/>
+      <text class="s-text-b" x="295" y="60" text-anchor="middle">Edge location</text>
+      <text class="s-text-s" x="295" y="80" text-anchor="middle">Mumbai (cached copy)</text>
+      <rect class="s-orange-soft" x="215" y="224" width="160" height="68" rx="8"/>
+      <text class="s-text-b" x="295" y="250" text-anchor="middle">Edge location</text>
+      <text class="s-text-s" x="295" y="270" text-anchor="middle">Toronto (cached copy)</text>
+      <!-- cloudfront label -->
+      <text class="s-text-s" x="295" y="165" text-anchor="middle">CloudFront</text>
+      <text class="s-text-s" x="295" y="181" text-anchor="middle">edge network</text>
+      <!-- origin -->
+      <rect class="s-dash" x="450" y="100" width="230" height="130" rx="10"/>
+      <text class="s-text-s" x="565" y="120" text-anchor="middle">Region: us-east-1</text>
+      <rect class="s-green" x="480" y="132" width="170" height="70" rx="8"/>
+      <text class="s-text-b" x="565" y="160" text-anchor="middle">S3 bucket (origin)</text>
+      <text class="s-text-s" x="565" y="182" text-anchor="middle">public access blocked</text>
+      <!-- arrows -->
+      <path class="s-line" d="M150 68 H213" marker-end="url(#arr21a)"/>
+      <path class="s-line" d="M150 258 H213" marker-end="url(#arr21a)"/>
+      <path class="s-line-o" d="M375 68 C430 68 440 140 478 150" marker-end="url(#arr21b)"/>
+      <path class="s-line-o" d="M375 258 C430 258 440 190 478 182" marker-end="url(#arr21b)"/>
+      <text class="s-text-s" x="420" y="58" text-anchor="middle">only on a miss</text>
+      <text class="s-text-s" x="420" y="284" text-anchor="middle">only on a miss</text>
+      <!-- blocked direct -->
+      <path class="s-line" d="M85 286 V312 H565 V204" style="stroke:var(--red);stroke-dasharray:5 4" marker-end="url(#arr21a)"/>
+      <text class="s-text-s" x="325" y="334" text-anchor="middle" style="fill:var(--red)">direct access to bucket: 403 Forbidden</text>
+    </svg>
+    <figcaption>Users talk to the nearest edge. The edge only goes back to the S3 origin when it doesn't have a fresh copy. Nobody can reach the bucket directly.</figcaption>
+  </figure>
+
+  <h2>How CloudFront serves a request</h2>
+  <ol class="steps">
+    <li>A user opens your site. DNS sends them to the <strong>nearest edge location</strong> (not to your bucket).</li>
+    <li>The edge checks its cache. If it has a fresh copy, that is a <strong>cache hit</strong>: it replies right away.</li>
+    <li>If not, that is a <strong>cache miss</strong>: the edge fetches the file from the <strong>origin</strong>, sends it to the user, and keeps a copy.</li>
+    <li>The next user near that edge (say, someone in Montreal after someone in Toronto) gets a fast cache hit.</li>
+  </ol>
+
+  <h3>Caching and TTL</h3>
+  <p>A cached copy doesn't live forever. Each object has a <strong>TTL (Time To Live)</strong>: how long the edge may keep serving it before checking the origin again. CloudFront's default is 24 hours, and you can change it in the cache settings or from the origin with <code>Cache-Control</code> headers.</p>
+  <ul>
+    <li><strong>Long TTL</strong> = fewer trips to the origin, faster and cheaper, but users may see an old version for longer.</li>
+    <li><strong>Short TTL</strong> = changes appear sooner, but more requests go back to the origin.</li>
+  </ul>
+  <p>If you deploy a new version and can't wait for TTLs to expire, you can create an <strong>invalidation</strong> to tell every edge to drop its copy:</p>
+<pre><code>aws cloudfront create-invalidation \
+  --distribution-id E1ABCDEXAMPLE \
+  --paths "/index.html" "/css/*"</code></pre>
+  <p>Using <code>"/*"</code> clears everything. A limited number of invalidation paths each month are free; beyond that, they cost a little.</p>
+
+  <div class="demo" id="demo-cdn">
+    <div class="demo-head">Try it: cache hit or miss?</div>
+    <div class="demo-body">
+      <p>The origin is an S3 bucket in North Virginia. Pick where the user is, then request <code>logo.png</code>. Request it again to see the cache at work. Each city has its own edge cache. (Numbers are illustrative, not real measurements.)</p>
+      <div class="row">
+        <label for="cdn-city">User location</label>
+        <select id="cdn-city">
+          <option value="delhi">New Delhi, India</option>
+          <option value="toronto">Toronto, Canada</option>
+          <option value="frankfurt">Frankfurt, Germany</option>
+          <option value="sydney">Sydney, Australia</option>
+          <option value="saopaulo">São Paulo, Brazil</option>
+          <option value="virginia">Washington DC, USA</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="cdn-go" type="button">Request logo.png</button>
+        <button class="btn" id="cdn-direct" type="button">Without CloudFront</button>
+        <button class="btn" id="cdn-ttl" type="button">Let TTL expire</button>
+        <button class="btn" id="cdn-reset" type="button">Reset</button>
+      </div>
+      <div class="output" id="cdn-out">Pick a city and press "Request logo.png".</div>
+      <div id="cdn-bars" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <h2>Why put CloudFront in front of S3?</h2>
+  <p>You <em>can</em> serve a website straight from an S3 bucket by making it public, but that isn't best practice. CloudFront fixes three things at once:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Lower latency</h3><p>Content is served from the edge closest to each user, no matter which region the bucket lives in.</p></div>
+    <div class="card"><h3>Better security</h3><p>The bucket stays private. Users only ever talk to CloudFront, and you can add HTTPS and a web application firewall (AWS WAF) at the edge.</p></div>
+    <div class="card"><h3>Lower cost at scale</h3><p>Most requests are answered from cache, so far fewer requests and less data transfer hit S3. For a busy site, this usually costs less than serving everything from S3.</p></div>
+  </div>
+  <p>A common setup: an e-commerce app runs on EC2 or Kubernetes, while its images, CSS and JavaScript sit in S3 behind CloudFront. A fully static website can live entirely in S3 + CloudFront.</p>
+
+  <div class="xref-box"><div>Need a refresher on buckets, bucket policies and "Block Public Access"? See <a href="11-s3.html">Lesson 11: S3</a>.</div></div>
+
+  <h2>Origin access: keeping the bucket private</h2>
+  <p>If the bucket blocks all public access, how does CloudFront read from it? You give CloudFront its own identity and allow <em>only that identity</em> in the bucket policy.</p>
+  <ul>
+    <li><strong>Origin Access Control (OAC)</strong> is the current, recommended way. The bucket policy allows the CloudFront service, but only for your specific distribution.</li>
+    <li><strong>Origin Access Identity (OAI)</strong> is the older ("legacy") way. Think of it as a special virtual user, like a functional ID on a Linux server, that is allowed to read the bucket. You'll still see it in older setups and tutorials.</li>
+  </ul>
+  <p>When you choose OAC in the console, CloudFront gives you a policy to paste into the bucket. It looks like this:</p>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "AllowCloudFrontServicePrincipal",
+    "Effect": "Allow",
+    "Principal": { "Service": "cloudfront.amazonaws.com" },
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::www.example.com/*",
+    "Condition": {
+      "StringEquals": {
+        "AWS:SourceArn": "arn:aws:cloudfront::111122223333:distribution/E1ABCDEXAMPLE"
+      }
+    }
+  }]
+}</code></pre>
+  <p>In plain words: "Let CloudFront <code>GetObject</code> (read files) from this bucket, but only when the request comes from <em>my</em> distribution."</p>
+
+  <h2>Hands-on: S3 + CloudFront step by step</h2>
+  <div class="callout warn"><span class="callout-title">Watch out: cost</span>CloudFront and WAF are not entirely free. If you practise this, delete the distribution and bucket when you're done. To avoid any cost, you can just read along, or stick to plain S3 static hosting.</div>
+  <ol class="steps">
+    <li><strong>Create an S3 bucket.</strong> If you plan to use a custom domain, people often name it after the domain (e.g. <code>www.example.com</code>); any unique name works for this demo. Keep <strong>Block all public access</strong> turned <em>on</em>. Enabling versioning is optional but lets you recover deleted files.</li>
+    <li><strong>Upload your site files</strong>, e.g. <code>index.html</code> and a CSS file. If you open the bucket's own URL now, you get <strong>403 Forbidden</strong>. That is what we want.</li>
+    <li><strong>Create a CloudFront distribution.</strong> For <em>Origin domain</em>, pick your bucket from the list. (Load balancers, API Gateway and custom servers can also be origins.)</li>
+    <li><strong>Origin access:</strong> choose <em>Origin access control settings</em>, create a new OAC, and apply the bucket policy CloudFront gives you (as above). Never choose "Public".</li>
+    <li><strong>Viewer settings:</strong> set <em>Redirect HTTP to HTTPS</em>. Leave the default cache policy for now.</li>
+    <li><strong>WAF:</strong> optional extra protection against common web attacks. It costs extra, so you can disable it for a demo.</li>
+    <li><strong>Price class:</strong> "Use all edge locations" if your users are worldwide, or a cheaper class (e.g. North America and Europe) if your customers are only there.</li>
+    <li><strong>Alternate domain name + SSL certificate</strong> (optional): to serve from <code>www.example.com</code> instead of the CloudFront URL, add the name and an HTTPS certificate from AWS Certificate Manager. CloudFront needs that certificate to be created in <code>us-east-1</code>.</li>
+    <li><strong>Default root object:</strong> enter <code>index.html</code> so visiting the bare URL shows your home page.</li>
+    <li><strong>Create</strong> and wait 5–10 minutes while it deploys to the edges. Then open the distribution domain, e.g. <code>https://d111111abcdef8.cloudfront.net</code>. Your site loads. The S3 URL still says 403.</li>
+  </ol>
+  <div class="callout tip"><span class="callout-title">Tip</span>With OAC you don't need S3's "static website hosting" feature: CloudFront reads the files through the normal S3 endpoint, and the default root object handles <code>index.html</code>. If you pick the S3 <em>website</em> endpoint as the origin instead, OAC can't be used and the bucket would have to be public.</div>
+  <div class="callout"><span class="callout-title">Note</span>To point your own domain at the distribution, create a Route 53 <em>alias</em> record. DNS records are covered in <a href="08-route53.html">Lesson 8: Route 53</a>.</div>
+  <p><strong>Cleanup:</strong> a distribution must be <em>disabled</em> first, then deleted once it has finished disabling. Then empty and delete the bucket.</p>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How would you serve static assets globally and securely?" Good answer: private S3 bucket as origin, CloudFront in front with OAC, HTTPS redirect, a sensible TTL plus invalidations on deploy, optional WAF, and a price class that matches where the users are.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">A user in Toronto requests an image that someone else in Toronto loaded five minutes ago (TTL is 24 hours). What happens?</div>
+    <div class="opts"><button>The request goes to the S3 bucket in us-east-1</button><button>CloudFront copies the image to every edge first</button><button>The Toronto edge location serves its cached copy (cache hit)</button></div>
+    <div class="explain">The nearby edge already holds a fresh copy, so it answers directly without contacting the origin.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">You want the S3 bucket to stay private but still be readable by CloudFront. What do you use?</div>
+    <div class="opts"><button>Turn off Block Public Access</button><button>Origin Access Control plus a bucket policy allowing your distribution</button><button>Enable S3 static website hosting</button></div>
+    <div class="explain">OAC gives CloudFront an identity, and the bucket policy allows only that distribution to read objects. The bucket stays blocked for everyone else.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You deployed a new <code>index.html</code>, but users still see the old one. What is the quickest fix?</div>
+    <div class="opts"><button>Create a CloudFront invalidation for /index.html</button><button>Delete the S3 bucket and recreate it</button><button>Change the price class</button></div>
+    <div class="explain">An invalidation tells the edges to drop their cached copy so the next request fetches the new file from the origin.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A CDN keeps copies of your content in <strong>edge locations</strong> near users, which cuts latency.</li>
+      <li>CloudFront is AWS's CDN. The <strong>origin</strong> (S3, ALB, API Gateway, any web server) is where the real content lives.</li>
+      <li>Cache hit = served from the edge. Cache miss = fetched from the origin once, then cached for its <strong>TTL</strong>.</li>
+      <li>Keep the S3 bucket private and let CloudFront in with <strong>Origin Access Control</strong> (OAI is the legacy way).</li>
+      <li>Use invalidations after deploys, choose a price class for your audience, and delete demo distributions to avoid charges.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  // Illustrative round-trip times (ms): user to nearest edge, and edge (or user) to us-east-1 origin
+  var CITIES = {
+    delhi:     { name: "New Delhi", edge: "Delhi / Mumbai edge", toEdge: 15, toOrigin: 230 },
+    toronto:   { name: "Toronto", edge: "Toronto edge", toEdge: 8, toOrigin: 30 },
+    frankfurt: { name: "Frankfurt", edge: "Frankfurt edge", toEdge: 6, toOrigin: 95 },
+    sydney:    { name: "Sydney", edge: "Sydney edge", toEdge: 10, toOrigin: 210 },
+    saopaulo:  { name: "São Paulo", edge: "São Paulo edge", toEdge: 9, toOrigin: 125 },
+    virginia:  { name: "Washington DC", edge: "Ashburn edge", toEdge: 5, toOrigin: 8 }
+  };
+  var cache = {};
+  var sel = document.getElementById("cdn-city");
+  var out = document.getElementById("cdn-out");
+  var bars = document.getElementById("cdn-bars");
+  var history = [];
+
+  function render() {
+    var max = 1;
+    history.forEach(function (h) { if (h.ms > max) max = h.ms; });
+    bars.innerHTML = "";
+    history.slice(-5).forEach(function (h) {
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin:4px 0;font-size:14px";
+      var label = document.createElement("span");
+      label.style.cssText = "flex:0 0 120px;color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+      label.textContent = h.label;
+      var track = document.createElement("span");
+      track.style.cssText = "flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;height:16px;position:relative;min-width:0";
+      var fill = document.createElement("span");
+      var color = h.kind === "hit" ? "var(--green)" : (h.kind === "miss" ? "var(--orange)" : "var(--red)");
+      fill.style.cssText = "position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:" + color + ";width:" + Math.max(3, Math.round(h.ms / max * 100)) + "%";
+      track.appendChild(fill);
+      var val = document.createElement("span");
+      val.style.cssText = "flex:0 0 58px;text-align:right;font-weight:600";
+      val.textContent = h.ms + " ms";
+      row.appendChild(label); row.appendChild(track); row.appendChild(val);
+      bars.appendChild(row);
+    });
+  }
+  function log(label, ms, kind) { history.push({ label: label, ms: ms, kind: kind }); render(); }
+
+  document.getElementById("cdn-go").addEventListener("click", function () {
+    var c = CITIES[sel.value];
+    if (cache[sel.value]) {
+      out.className = "output ok";
+      out.innerHTML = "<b>Cache HIT</b> at the " + c.edge + ". The file comes straight from the edge: about <b>" + c.toEdge + " ms</b>. The S3 origin is not contacted.";
+      log(c.name + " hit", c.toEdge, "hit");
+    } else {
+      cache[sel.value] = true;
+      var ms = c.toEdge + c.toOrigin;
+      out.className = "output";
+      out.innerHTML = "<b>Cache MISS</b> at the " + c.edge + ". The edge fetches logo.png from S3 in us-east-1 (" + c.toOrigin + " ms), returns it, and keeps a copy. Total about <b>" + ms + " ms</b>. Press the button again.";
+      log(c.name + " miss", ms, "miss");
+    }
+  });
+  document.getElementById("cdn-direct").addEventListener("click", function () {
+    var c = CITIES[sel.value];
+    var ms = c.toOrigin + 20;
+    out.className = "output bad";
+    out.innerHTML = "<b>Direct to S3</b> (if the bucket were public): every request from " + c.name + " travels to us-east-1, about <b>" + ms + " ms</b> each time, with no caching. With Block Public Access on, you'd simply get <b>403 Forbidden</b>.";
+    log(c.name + " direct", ms, "direct");
+  });
+  document.getElementById("cdn-ttl").addEventListener("click", function () {
+    cache = {};
+    out.className = "output";
+    out.innerHTML = "TTL expired (or you ran an invalidation). Every edge now has to check the origin again on the next request.";
+  });
+  document.getElementById("cdn-reset").addEventListener("click", function () {
+    cache = {}; history = []; render();
+    out.className = "output";
+    out.textContent = "Pick a city and press \"Request logo.png\".";
+  });
+})();
+</script>
+</body>
+</html>

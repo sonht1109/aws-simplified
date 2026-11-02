@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon Q Developer CLI · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="38">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Amazon Q Developer CLI</h1>
+    <p class="lead">An AI assistant that lives in your terminal, where DevOps work actually happens. You'll learn what makes it different from a chat window (agents, context, hooks, trusted tools), how to install it for free, and how it handled two real tasks: writing Terraform for a secure S3 bucket and fixing a broken Kubernetes pod.</p>
+  </header>
+
+  <h2>What it is, and why the terminal?</h2>
+  <p><b>Amazon Q Developer CLI</b> is an <b>agentic AI assistant</b> for your command line. "Agentic" means it doesn't just answer. With your permission it can also <em>do</em> things: run shell commands, read and write files, call AWS, or run <code>kubectl</code>. Typical uses:</p>
+  <ul>
+    <li>Creating infrastructure (a Kubernetes cluster, Terraform for AWS resources).</li>
+    <li>Getting unstuck: "why is this deployment failing?"</li>
+    <li>Understanding large codebases (application code, IaC, maintenance scripts). This is useful when you have to troubleshoot a build or deployment for code you didn't write.</li>
+  </ul>
+  <p>Many AI assistants live inside an IDE (code editor). DevOps engineers, though, spend most of their day in the <b>terminal</b>: editing YAML manifests, running shell and Git commands, troubleshooting dev or production, and calling AWS with the CLI. Q Developer CLI brings the assistant to that terminal.</p>
+
+  <h2>The features that make it useful</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Multiple agents</h3><p>Create a specialist for each job, such as a <b>Terraform agent</b>, a <b>Kubernetes agent</b> or a <b>Git agent</b>. Each one has its own instructions, context and allowed tools.</p></div>
+    <div class="card"><h3>Context management</h3><p>Give the AI <em>your</em> rules so its output fits your setup instead of generic boilerplate. Context can be set at three levels (below).</p></div>
+    <div class="card"><h3>Agent hooks</h3><p>Run shell commands automatically at set moments (e.g. when the agent starts, or each time you send a prompt) and feed their output in as context.</p></div>
+    <div class="card"><h3>Strong models</h3><p>It runs on Anthropic Claude models. Claude Sonnet 4 was the default when this was written. Good reasoning matters for multi-step DevOps tasks.</p></div>
+  </div>
+
+  <h3>Three levels of context</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Level</th><th>How long it lasts</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><b>Agent resources</b></td><td>Every session that uses that agent</td><td>Files listed in the agent's config, e.g. <code>AmazonQ.md</code>, <code>README.md</code>, rule files under <code>.amazonq/rules/</code></td></tr>
+      <tr><td><b>Session context</b></td><td>Only the current chat</td><td><code>/context add instructions.md</code></td></tr>
+      <tr><td><b>Knowledge base</b></td><td>Across sessions; built for big codebases</td><td>Index a large repo so the agent can search it</td></tr>
+    </tbody>
+  </table></div>
+  <p>Rule files are also how you set <b>guardrails</b>, for example "never touch these directories" or "only run these commands".</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 280" role="img" aria-label="You type in the terminal; q chat sends your prompt plus the agent's instructions and context to the AI model; the agent asks your permission and then uses tools on your machine such as the shell, files, AWS CLI credentials and kubectl">
+      <defs><marker id="arr38" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="10" y="100" width="130" height="80" rx="10"/>
+      <text class="s-text-w" x="75" y="134" text-anchor="middle">You</text>
+      <text class="s-text-w" x="75" y="156" text-anchor="middle">$ q chat</text>
+      <rect class="s-dash" x="170" y="20" width="250" height="240" rx="10"/>
+      <text class="s-text-b" x="295" y="44" text-anchor="middle">Agent (e.g. k8s-agent)</text>
+      <rect class="s-purple" x="186" y="58" width="218" height="40" rx="6"/>
+      <text class="s-text" x="295" y="83" text-anchor="middle">Instructions &amp; rules</text>
+      <rect class="s-purple" x="186" y="106" width="218" height="40" rx="6"/>
+      <text class="s-text" x="295" y="131" text-anchor="middle">Context (3 levels)</text>
+      <rect class="s-purple" x="186" y="154" width="218" height="40" rx="6"/>
+      <text class="s-text" x="295" y="179" text-anchor="middle">Hooks (auto-run commands)</text>
+      <rect class="s-orange-soft" x="186" y="202" width="218" height="44" rx="6"/>
+      <text class="s-text-b" x="295" y="229" text-anchor="middle">Tools + trust (y / t / n)</text>
+      <rect class="s-blue" x="460" y="30" width="230" height="70" rx="10"/>
+      <text class="s-text-b" x="575" y="60" text-anchor="middle">AI model</text>
+      <text class="s-text-s" x="575" y="82" text-anchor="middle">plans the next step</text>
+      <rect class="s-green" x="460" y="160" width="230" height="100" rx="10"/>
+      <text class="s-text-b" x="575" y="186" text-anchor="middle">Your machine</text>
+      <text class="s-text-s" x="575" y="208" text-anchor="middle">shell · files · kubectl</text>
+      <text class="s-text-s" x="575" y="228" text-anchor="middle">AWS via your ~/.aws</text>
+      <text class="s-text-s" x="575" y="246" text-anchor="middle">credentials</text>
+      <path class="s-line" d="M140 140 H168" marker-end="url(#arr38)"/>
+      <path class="s-line" d="M420 78 H458" marker-end="url(#arr38)"/>
+      <path class="s-line-o" d="M404 224 H458" marker-end="url(#arr38)"/>
+    </svg>
+    <figcaption>Your prompt goes to the model along with the agent's instructions and context. When the model wants to act, the agent asks your permission and then runs tools on your machine.</figcaption>
+  </figure>
+
+  <h2>Install and sign in (free)</h2>
+  <p>You don't need a paid AWS account. Sign in with a free <b>AWS Builder ID</b> (a personal AWS developer profile, separate from any AWS account).</p>
+  <ol class="steps">
+    <li>Go to the Amazon Q Developer "Get started" page → <b>Command line</b>. Download the installer for your OS (a <code>.dmg</code> on macOS; Linux packages are also available).</li>
+    <li>Install it, then sign in with your Builder ID (<code>q login</code>, or follow the prompt on first launch).</li>
+    <li>Run <code>q chat</code>. The banner tells you which model you're chatting with.</li>
+  </ol>
+<pre><code># interactive chat
+q chat
+&gt; generate linux command to list files
+
+# one-shot, non-interactive (handy in scripts)
+q chat --no-interactive "generate linux command to list files"</code></pre>
+  <div class="callout"><span class="callout-title">Note</span>Q doesn't need your AWS keys separately. When it runs AWS or Terraform commands, they use whatever you already set up with <code>aws configure</code> (<code>~/.aws/credentials</code>). See <a href="12-aws-cli.html">Lesson 12: AWS CLI</a>.</div>
+  <div class="callout warn"><span class="callout-title">Things change fast</span>In November 2025 Amazon Q Developer CLI was renamed <b>Kiro CLI</b>. Running <code>q update</code> upgrades you, your settings carry over, and the <code>q</code> command still works. The ideas in this lesson apply to Kiro CLI, but some command names and flags may differ, so check the Kiro docs.</div>
+
+  <h2>Working with agents and context</h2>
+<pre><code># inside q chat
+/agent help                                # list, create, edit, set a default…
+/agent create --name demo-terraform-agent  # starts from a default config
+/agent list
+
+# start a new chat using that agent
+q chat --agent demo-terraform-agent
+
+# add a file to this session's context
+/context add instructions.md</code></pre>
+  <p>The <code>instructions.md</code> in the example was short:</p>
+<pre><code>- Always use the us-east-1 region.
+- Always add tags to resources, e.g. Name = &lt;resource-name&gt;.</code></pre>
+  <p>Hooks are set in the agent's JSON config. For example, a hook can run <code>git status</code> when the agent starts so it always knows what's changed:</p>
+<pre><code>"hooks": {
+  "agentSpawn":       [ { "command": "git status" } ],
+  "userPromptSubmit": [ { "command": "kubectl get pods -A" } ]
+}</code></pre>
+
+  <h2>Trust: the safety switch</h2>
+  <p>Whenever the agent wants to use a tool, such as writing a file or running a command, it asks first:</p>
+  <ul>
+    <li><b>y</b>: allow it this one time.</li>
+    <li><b>t</b>: <b>trust</b> this tool for the rest of the session, so it won't ask again.</li>
+    <li><b>n</b>: deny.</li>
+  </ul>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Trust carefully, especially when your terminal is pointed at a real AWS account or production cluster. Read what the agent is about to run. "Trust always" is convenient for reading files but risky for commands that delete or change things.</div>
+
+  <div class="demo" id="demo-q">
+    <div class="demo-head">Try it: a simulated Q CLI session</div>
+    <div class="demo-body">
+      <p><b>Simulated, not a real AI.</b> Pick a scenario and click <b>Next</b> to go through it. When the agent asks for permission, choose how to answer.</p>
+      <div class="row" id="q-scen"></div>
+      <pre id="q-term" style="min-height:180px;white-space:pre-wrap;word-break:break-word;margin-top:12px"><code></code></pre>
+      <div class="row" id="q-actions"></div>
+    </div>
+  </div>
+
+  <h2>Real task 1: Terraform for a secure S3 bucket</h2>
+  <p>With <code>demo-terraform-agent</code> and the instructions file in context, the prompt was: <em>"generate terraform code to create S3 bucket with all the best practices"</em>. The agent asked to write a file (allowed with <b>t</b>) and produced something like this:</p>
+<pre><code>provider "aws" {
+  region = "us-east-1"                      # from instructions.md
+}
+
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
+resource "aws_s3_bucket" "secure" {
+  bucket = "my-secure-bucket-${random_id.suffix.hex}"
+  tags   = { Name = "my-secure-bucket" }    # tag format from instructions.md
+}
+
+resource "aws_s3_bucket_versioning" "secure" {
+  bucket = aws_s3_bucket.secure.id
+  versioning_configuration { status = "Enabled" }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "secure" {
+  bucket = aws_s3_bucket.secure.id
+  rule {
+    apply_server_side_encryption_by_default { sse_algorithm = "AES256" }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "secure" {
+  bucket                  = aws_s3_bucket.secure.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}</code></pre>
+  <p>Then the usual <code>terraform init</code> → <code>plan</code> → <code>apply</code> (see <a href="26-terraform.html">Lesson 26</a>). In the S3 console, the bucket had the requested tag, was in us-east-1, and had versioning, encryption and Block Public Access turned on (these settings are explained in <a href="11-s3.html">Lesson 11</a>). The agent followed the context file instead of guessing.</p>
+
+  <h2>Real task 2: troubleshooting a broken pod</h2>
+  <p>A local <code>kind</code> cluster (Kubernetes running in Docker on your laptop) was given a deployment with an image tag that doesn't exist:</p>
+<pre><code>kind create cluster --name demo-cluster-q
+kubectl create deployment nginx --image=nginx:doesnotexist
+kubectl get pods        # STATUS: ErrImagePull / ImagePullBackOff</code></pre>
+  <p>A <code>k8s-agent</code> was created with session context saying <em>"act as a Kubernetes troubleshooting engineer and provide solutions"</em>. Asked "what is the issue with this pod?", it ran <code>kubectl</code> (after a trust prompt), found the <b>invalid image tag</b>, and suggested a fix:</p>
+<pre><code>kubectl set image deployment/nginx nginx=nginx:latest
+kubectl get pods        # STATUS: Running</code></pre>
+  <div class="xref-box"><div>New to pods and deployments? See <a href="24-eks.html">Lesson 24: EKS</a>.</div></div>
+  <div class="callout tip"><span class="callout-title">Tip</span>AI suggestions are a starting point. In the demo, the human ran the fix command. Keep it that way for production systems, and keep your IaC and cluster changes in Git.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">You want every chat with your Terraform agent to remember "always tag resources". Which is the best place for that rule?</div>
+    <div class="opts"><button>Type it at the start of every chat</button><button>In the agent's resources/rules, so it loads every session</button><button>In <code>~/.aws/credentials</code></button></div>
+    <div class="explain">Agent resources persist across sessions. <code>/context add</code> lasts only for the current session.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">The agent asks to run a command and you press <b>t</b>. What happens?</div>
+    <div class="opts"><button>The command is denied</button><button>It runs once and asks again next time</button><button>That tool is trusted for the rest of the session</button></div>
+    <div class="explain"><b>y</b> = once, <b>t</b> = trust for the session, <b>n</b> = deny.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">How does Q CLI get permission to create AWS resources through Terraform?</div>
+    <div class="opts"><button>It uses the credentials you already configured for the AWS CLI</button><button>It needs a separate paid Q subscription key</button><button>It logs in as the root user automatically</button></div>
+    <div class="explain">Commands it runs use your existing local AWS credentials. The Builder ID only signs you in to Q itself.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Amazon Q Developer CLI is an <b>agentic</b> AI assistant in the terminal. It can explain, generate, and (with permission) run commands.</li>
+      <li>Create <b>separate agents</b> per job (Terraform, Kubernetes, Git), each with its own instructions and tools.</li>
+      <li>Context comes in three levels: <b>agent resources</b> (persistent), <b>session</b> (<code>/context add</code>), and <b>knowledge base</b> (large codebases). <b>Hooks</b> add command output automatically.</li>
+      <li>It's free to start with an <b>AWS Builder ID</b>. Run <code>q chat</code>, or <code>q chat --no-interactive "…"</code> for one-shot use.</li>
+      <li>Use <b>trust</b> (y / t / n) carefully, and review what it generates before applying it to real environments.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var SC = {
+    ls: { name: "Quick test", steps: [
+      "$ q chat\nYou are chatting with claude-sonnet-4\n\n> generate linux command to list files",
+      "Use the ls command:\n\n  ls          # list files\n  ls -l       # long format (permissions, size, date)\n  ls -la      # include hidden files\n  ls -lh      # human-readable sizes\n  ls -lt      # sort by modification time",
+      "✔ Done. No tools were needed, so nothing was run on your machine."
+    ]},
+    tf: { name: "Terraform agent", steps: [
+      "$ q chat --agent demo-terraform-agent\n> /context add instructions.md\nAdded 1 path(s) to context.",
+      "> generate terraform code to create S3 bucket with all the best practices\n\nThinking… I'll create Terraform for an S3 bucket in us-east-1 with\nversioning, encryption, public access block and the requested tags.",
+      { ask: "Tool request: fs_write → create ./s3-bucket.tf\nAllow this action? [y / t / n]" },
+      "Created s3-bucket.tf\n  • provider region: us-east-1   (from your context)\n  • tags: Name = \"my-secure-bucket\"\n  • versioning: Enabled\n  • encryption: AES256\n  • public access: fully blocked\n\nNext: terraform init && terraform plan && terraform apply"
+    ]},
+    k8s: { name: "K8s agent", steps: [
+      "$ kubectl get pods\nNAME                     READY  STATUS        RESTARTS\nnginx-5d9c7b8f6d-x2k4p   0/1    ErrImagePull  0",
+      "$ q chat --agent k8s-agent\n> /context add k8s-instructions.md\n> what is the issue with this pod?",
+      { ask: "Tool request: execute_bash → kubectl describe pod nginx-5d9c7b8f6d-x2k4p\nAllow this action? [y / t / n]" },
+      "Issue identified: the pod can't start because the image tag\n\"nginx:doesnotexist\" does not exist in the registry.\n\nProposed fix: point the deployment at a valid tag:\n  kubectl set image deployment/nginx nginx=nginx:latest",
+      "$ kubectl set image deployment/nginx nginx=nginx:latest\ndeployment.apps/nginx image updated\n$ kubectl get pods\nNAME                     READY  STATUS   RESTARTS\nnginx-7c79c4bf97-9qz8l   1/1    Running  0"
+    ]}
+  };
+  var scenBox = document.getElementById("q-scen"), term = document.querySelector("#q-term code"), act = document.getElementById("q-actions");
+  var cur = null, idx = 0, log = "";
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function btn(label, cls, fn) {
+    var b = document.createElement("button");
+    b.className = "btn" + (cls ? " " + cls : ""); b.textContent = label;
+    b.addEventListener("click", fn); act.appendChild(b); return b;
+  }
+  function show(text) { log += (log ? "\n\n" : "") + text; term.innerHTML = esc(log); }
+
+  function step() {
+    act.innerHTML = "";
+    var steps = SC[cur].steps;
+    if (idx >= steps.length) { btn("Restart scenario", "", function () { start(cur); }); return; }
+    var s = steps[idx];
+    if (typeof s === "object") {
+      show(s.ask);
+      btn("y: allow once", "primary", function () { show("> y   (allowed once)"); idx++; next(); });
+      btn("t: trust for session", "", function () { show("> t   (tool trusted for this session)"); idx++; next(); });
+      btn("n: deny", "", function () {
+        show("> n\nTool use denied. I can't inspect your files or cluster without it.\nTip: run the command yourself and paste the output, or allow the tool.");
+        act.innerHTML = ""; btn("Restart scenario", "", function () { start(cur); });
+      });
+      return;
+    }
+    show(s); idx++;
+    next();
+  }
+  function next() {
+    act.innerHTML = "";
+    if (idx < SC[cur].steps.length) btn("Next →", "primary", step);
+    else btn("Restart scenario", "", function () { start(cur); });
+  }
+  function start(key) {
+    cur = key; idx = 0; log = "";
+    Array.prototype.forEach.call(scenBox.children, function (b) { b.setAttribute("aria-pressed", b.dataset.k === key ? "true" : "false"); });
+    step();
+  }
+  Object.keys(SC).forEach(function (k) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = SC[k].name; b.dataset.k = k;
+    b.addEventListener("click", function () { start(k); });
+    scenBox.appendChild(b);
+  });
+  start("ls");
+})();
+</script>
+</body>
+</html>

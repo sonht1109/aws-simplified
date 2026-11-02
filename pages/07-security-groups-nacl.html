@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Security Groups vs NACLs · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .sim-box { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 10px 0; background: var(--surface-2); }
+  .sim-box h4 { margin: 0 0 6px; font-size: 15px; }
+  .sim-box label { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; }
+  .sim-box select { width: 100%; }
+  .rule-list { font: 13px/1.5 var(--mono); margin: 6px 0 0; padding: 0; list-style: none; }
+  .rule-list li { margin: 0; padding: 2px 6px; border-radius: 4px; }
+  .rule-list .deny { color: var(--red); }
+  .rule-list .allow { color: var(--green); }
+  .trace { list-style: none; padding: 0; margin: 0; }
+  .trace li { margin: 3px 0; }
+  .trace .y { color: var(--green); font-weight: 700; }
+  .trace .n { color: var(--red); font-weight: 700; }
+</style>
+</head>
+<body data-page="07">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Security Groups vs NACLs</h1>
+    <p class="lead">AWS gives you two firewalls inside a VPC: security groups guard each server, and network ACLs guard each subnet. You'll learn how each works, how their rules are evaluated, what "stateful vs stateless" means, and you'll replay a hands-on experiment that blocks and unblocks a real app.</p>
+  </header>
+
+  <div class="xref-box"><div>This lesson builds on <a href="06-vpc.html">Lesson 6: VPC</a> — subnets, internet gateways and route tables are explained there.</div></div>
+
+  <h2>Security is a shared job</h2>
+  <p>Before a company moves to the cloud, its first question is "Is it secure?" AWS's answer is that security is a <strong>shared responsibility</strong> (see <a href="02-intro-to-aws.html">Lesson 2</a>): AWS secures the data centers and gives you tools, and <em>you</em> must configure those tools well.</p>
+  <p>A request from a user travels a long way inside your VPC — internet gateway, load balancer, route tables. The <strong>last two checkpoints</strong> before it reaches your app are:</p>
+  <ul>
+    <li><strong>NACL</strong> (Network Access Control List) — at the <strong>subnet</strong> edge. It protects every server in that subnet.</li>
+    <li><strong>Security group</strong> — at the <strong>instance</strong> (EC2) level. It protects one server (or a group of servers you attach it to).</li>
+  </ul>
+  <p>Because they're the last line of defense, a mistake here usually means your app is exposed.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 260" role="img" aria-label="Traffic from the internet passes the internet gateway, then the NACL at the subnet edge, then the security group around the EC2 instance, before reaching the app.">
+      <defs><marker id="arr7" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="8" y="104" width="90" height="52" rx="8"/>
+      <text class="s-text-b" x="53" y="135" text-anchor="middle">User</text>
+      <rect class="s-orange" x="122" y="104" width="70" height="52" rx="8"/>
+      <text class="s-text-ink" x="157" y="135" text-anchor="middle">IGW</text>
+      <rect class="s-dash" x="210" y="10" width="482" height="240" rx="12"/>
+      <text class="s-text-s" x="224" y="30">VPC</text>
+      <rect class="s-green" x="250" y="40" width="430" height="196" rx="10"/>
+      <text class="s-text-b" x="380" y="62">Subnet</text>
+      <rect class="s-red" x="236" y="80" width="28" height="140" rx="6"/>
+      <text class="s-text-b" x="250" y="155" text-anchor="middle" transform="rotate(-90 250 150)">NACL</text>
+      <rect class="s-dash" x="400" y="84" width="260" height="132" rx="10" style="stroke:var(--red)"/>
+      <text class="s-text-b" x="530" y="104" text-anchor="middle" style="fill:var(--red)">Security group</text>
+      <rect class="s-orange-soft" x="440" y="120" width="180" height="70" rx="8"/>
+      <text class="s-text-b" x="530" y="150" text-anchor="middle">EC2 instance</text>
+      <text class="s-text-s" x="530" y="170" text-anchor="middle">app on port 8000</text>
+      <path class="s-line-o" d="M98 130 H120" marker-end="url(#arr7)"/>
+      <path class="s-line-o" d="M192 130 H234" marker-end="url(#arr7)"/>
+      <path class="s-line-o" d="M264 150 H438" marker-end="url(#arr7)"/>
+      <text class="s-text-s" x="290" y="200">Layer 1: subnet</text>
+      <text class="s-text-s" x="290" y="216">allow + deny rules</text>
+      <text class="s-text-s" x="440" y="208">Layer 2: instance, allow rules only</text>
+    </svg>
+    <figcaption>Two layers of defense. Incoming traffic must pass the NACL first, then the security group.</figcaption>
+  </figure>
+
+  <h2>Security groups: the guard at each server</h2>
+  <p>A <strong>security group</strong> is a virtual firewall attached to an EC2 instance (more precisely, to its network interface). It has two lists of rules:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Inbound rules</h3><p>Traffic <strong>coming into</strong> your instance — e.g. a user opening your website. <em>Default: nothing is allowed.</em> You add rules like "TCP port 8000 from anywhere".</p></div>
+    <div class="card"><h3>Outbound rules</h3><p>Traffic <strong>going out</strong> of your instance — e.g. your shop app calling a payment provider. <em>Default: everything is allowed.</em> You can tighten it if needed.</p></div>
+  </div>
+  <p>This is why, back in <a href="04-ec2.html">Lesson 4</a>, Jenkins on port 8080 couldn't be reached until you added an inbound rule. When you launch an instance from the console, the wizard creates a security group that allows only <strong>SSH on port 22</strong> — otherwise you couldn't even log in.</p>
+  <ul>
+    <li>Security group rules can only <strong>allow</strong>. There is no "deny" rule — anything not allowed is blocked.</li>
+    <li>A rule names a <strong>protocol</strong> (TCP/UDP), a <strong>port</strong> or range, and a <strong>source</strong> (an IP range like <code>203.0.113.0/24</code>, <code>0.0.0.0/0</code> for "anywhere", or another security group).</li>
+    <li>All rules are checked together — there is no rule order.</li>
+    <li>Changes apply right away to every instance using that security group.</li>
+  </ul>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Opening "All traffic from 0.0.0.0/0" to make things work quickly is a common mistake. Every unused open port is a door for attackers or junk traffic. Open only the ports your app actually needs.</div>
+  <div class="callout"><span class="callout-title">Note</span>AWS restricts outbound traffic on <strong>port 25</strong> (email/SMTP) from EC2 by default, to stop spammers from abusing its IP addresses. You can ask AWS to lift this if you really run a mail server.</div>
+
+  <h2>NACLs: the gate of each subnet</h2>
+  <p>Now imagine a team that, to save time, opens <em>all</em> traffic from <em>everywhere</em> on its 50 instances. As the DevOps or network admin, you can't police every instance. A <strong>Network ACL</strong> gives you a second layer you control at the <strong>subnet</strong> level:</p>
+  <ul>
+    <li>One NACL applies to <strong>every instance in the subnet</strong> automatically — 50 or 10,000 of them.</li>
+    <li>NACLs support both <strong>ALLOW and DENY</strong> rules. If you deny something here, opening it in a security group won't help.</li>
+    <li>You can block by <strong>port</strong> ("deny port 8000") or by <strong>IP range</strong> ("deny <code>3.4.0.0/16</code>").</li>
+    <li>The <strong>default NACL</strong> that comes with a VPC allows all inbound and outbound traffic, so by default it doesn't get in the way.</li>
+  </ul>
+
+  <h3>Rule order matters</h3>
+  <p>Each NACL rule has a <strong>rule number</strong>. AWS checks rules from the <strong>lowest number up</strong> and stops at the <strong>first match</strong>. The last rule, shown as <code>*</code>, denies everything that didn't match anything else — you can't delete it.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Rule #</th><th>Type</th><th>Port</th><th>Source</th><th>Action</th></tr>
+    <tr><td>100</td><td>All traffic</td><td>All</td><td>0.0.0.0/0</td><td>ALLOW</td></tr>
+    <tr><td>200</td><td>Custom TCP</td><td>8000</td><td>0.0.0.0/0</td><td>DENY</td></tr>
+    <tr><td>*</td><td>All traffic</td><td>All</td><td>0.0.0.0/0</td><td>DENY</td></tr>
+  </table></div>
+  <p>Is port 8000 blocked here? <strong>No!</strong> Rule 100 (allow all) matches first, so rule 200 is never reached. To block 8000, its deny rule needs a <em>lower</em> number than the allow-all rule, e.g. 110 deny and 200 allow.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>Number your rules in steps of 10 or 100 (100, 110, 200…) so you can slot new rules in between later.</div>
+
+  <h2>Stateful vs stateless</h2>
+  <p>This is the most-asked difference in interviews. Every connection has two directions: the <strong>request</strong> and the <strong>response</strong>.</p>
+  <div class="grid-2">
+    <div class="card"><h3>Security group = stateful</h3><p>It <strong>remembers</strong> connections. If a request was allowed in, the response is automatically allowed out — no outbound rule needed. Same the other way: if your app calls google.com, the reply is let back in automatically.</p></div>
+    <div class="card"><h3>NACL = stateless</h3><p>It has <strong>no memory</strong>. Every packet is checked against the rules on its own. So a response needs its own rule in the other direction — for example an outbound rule allowing the return traffic.</p></div>
+  </div>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A <strong>security group</strong> is a guard who remembers faces: "You came in a minute ago, go ahead and leave." A <strong>NACL</strong> is a turnstile that checks your ticket both ways — entering and leaving.</div>
+  <p>Responses go back to the client on a random high "ephemeral" port (typically 1024–65535). With the default NACL that's fine, because it allows everything. If you write a custom NACL, remember an <strong>outbound</strong> rule for those ports, or replies will be silently dropped.</p>
+
+  <h2>Side by side</h2>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Security group</th><th>NACL</th></tr>
+    <tr><td>Works at</td><td>Instance level</td><td>Subnet level</td></tr>
+    <tr><td>Rule types</td><td>Allow only</td><td>Allow and deny</td></tr>
+    <tr><td>Rule order</td><td>All rules checked together</td><td>Lowest number first; first match wins</td></tr>
+    <tr><td>State</td><td>Stateful (return traffic automatic)</td><td>Stateless (return traffic needs a rule)</td></tr>
+    <tr><td>Default</td><td>Inbound: deny all · Outbound: allow all</td><td>Default NACL: allow all both ways</td></tr>
+    <tr><td>Typical owner</td><td>Instance / app owner</td><td>DevOps / network admins</td></tr>
+  </table></div>
+  <p>Using <strong>both</strong> is called <strong>defense in depth</strong>: if one layer is misconfigured, the other can still protect you. That's how most organizations run.</p>
+
+  <h2>Hands-on: block and unblock an app</h2>
+  <p>Here's the experiment you can repeat in your own account.</p>
+  <ol class="steps">
+    <li><strong>Create a VPC.</strong> In the VPC console choose <em>Create VPC → VPC and more</em>. Name it <code>demo-vpc</code> and keep the defaults. AWS creates public and private subnets in two Availability Zones, route tables and an internet gateway for you. The <em>Resource map</em> tab shows a diagram of it all.</li>
+    <li><strong>Launch an EC2 instance</strong> (Ubuntu, t2.micro, your key pair). Under <em>Network settings → Edit</em>, pick <code>demo-vpc</code>, choose a <strong>public</strong> subnet (only for this demo — real apps go in private subnets), and enable <em>Auto-assign public IP</em>. Let it create a new security group.</li>
+    <li><strong>Start a tiny web app</strong> after you <a href="05-connect-to-ec2.html">SSH in</a>:
+<pre><code>sudo apt update
+python3 -m http.server 8000</code></pre></li>
+    <li><strong>Try <code>http://&lt;public-ip&gt;:8000</code></strong> in a browser. It times out. The NACL allows everything, but the security group only allows port 22.</li>
+    <li><strong>Security group → Edit inbound rules → Add rule:</strong> Custom TCP, port 8000, source Anywhere-IPv4. Refresh — you see the directory listing (HTTP 200).</li>
+    <li><strong>NACL → Edit inbound rules:</strong> replace the allow-all rule with <code>100 · Custom TCP · 8000 · DENY</code>. Refresh — blocked again, even though the security group allows it.</li>
+    <li><strong>Reorder:</strong> set <code>100 ALLOW all</code> and <code>200 DENY 8000</code>. It works (rule 100 matches first). Change the deny to <code>110</code> and the allow to <code>200</code>, and it's blocked (rule 110 matches first).</li>
+  </ol>
+  <p>Notice how an app owner who "did everything right" in the security group can still be blocked by the subnet's NACL. That's the power the NACL gives the network team.</p>
+
+  <div class="demo" id="demo-fw">
+    <div class="demo-head">Try it: firewall simulator</div>
+    <div class="demo-body">
+      <p>Set up the two firewalls, then send a request to the EC2 instance. Watch where it gets stopped. Try turning off the outbound rules to see stateful vs stateless.</p>
+      <div class="sim-box">
+        <h4>Request</h4>
+        <select id="fw-port" aria-label="Destination port">
+          <option value="8000">Browser → port 8000 (Python app)</option>
+          <option value="22">SSH → port 22</option>
+        </select>
+      </div>
+      <div class="sim-box">
+        <h4>NACL inbound (subnet)</h4>
+        <select id="fw-nacl" aria-label="NACL inbound rules">
+          <option value="a">Default: 100 allow all</option>
+          <option value="b">100 deny 8000 (allow-all removed)</option>
+          <option value="c">100 allow all, 200 deny 8000</option>
+          <option value="d">110 deny 8000, 200 allow all</option>
+        </select>
+        <ul class="rule-list" id="fw-nacl-rules"></ul>
+      </div>
+      <div class="sim-box">
+        <h4>Security group inbound (instance)</h4>
+        <label><input type="checkbox" checked disabled> TCP 22 from 0.0.0.0/0 (SSH)</label>
+        <label><input type="checkbox" id="fw-sg8000"> TCP 8000 from 0.0.0.0/0</label>
+      </div>
+      <div class="sim-box">
+        <h4>Return path</h4>
+        <label><input type="checkbox" id="fw-sgout" checked> Security group outbound: allow all</label>
+        <label><input type="checkbox" id="fw-naclout" checked> NACL outbound: allow all (incl. ports 1024–65535)</label>
+      </div>
+      <div class="row"><button class="btn primary" id="fw-go">Send request</button></div>
+      <div class="output" id="fw-out">Press <b>Send request</b>.</div>
+    </div>
+  </div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How would you enforce strict network control across a VPC?" — Use NACLs at the subnet level for broad allow/deny policies (block bad IP ranges or forbidden ports for everyone), and tight security groups per instance that open only needed ports. Mention <em>stateful vs stateless</em> and <em>rule order</em>.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">A NACL has rule 100 ALLOW all traffic and rule 200 DENY TCP 8000. A request arrives on port 8000. What happens?</div>
+    <div class="opts"><button>Denied, because deny rules always win</button><button>Allowed, because rule 100 matches first</button><button>Denied, because the * rule runs first</button></div>
+    <div class="explain">NACL rules are checked from the lowest number up and the first match wins. Rule 100 allows everything, so rule 200 is never reached.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">You allow inbound port 443 in a security group but have removed every outbound rule. Can users still get responses?</div>
+    <div class="opts"><button>No, you need an outbound rule for port 443</button><button>No, you need an outbound rule for ports 1024–65535</button><button>Yes — security groups are stateful, so responses are allowed automatically</button></div>
+    <div class="explain">Security groups remember allowed connections, so return traffic is let through. A NACL, being stateless, would need an outbound rule.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You need to block one country's IP range for <em>every</em> server in a subnet. Which tool fits best?</div>
+    <div class="opts"><button>A NACL deny rule</button><button>A security group deny rule</button><button>A route table entry</button></div>
+    <div class="explain">Security groups can't deny. A NACL deny rule applies to the whole subnet at once.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><strong>Security groups</strong> protect instances; <strong>NACLs</strong> protect subnets. Traffic passes the NACL first, then the security group.</li>
+      <li>Security groups only <strong>allow</strong>; new ones block all inbound and allow all outbound.</li>
+      <li>NACLs <strong>allow and deny</strong>, checked by rule number from lowest up — first match wins, <code>*</code> denies the rest.</li>
+      <li>Security groups are <strong>stateful</strong> (replies automatic); NACLs are <strong>stateless</strong> (replies need a rule).</li>
+      <li>Open only the ports you need, and use both layers for <strong>defense in depth</strong>.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var NACL = {
+    a: [[100, "ALL", "ALLOW"]],
+    b: [[100, 8000, "DENY"]],
+    c: [[100, "ALL", "ALLOW"], [200, 8000, "DENY"]],
+    d: [[110, 8000, "DENY"], [200, "ALL", "ALLOW"]]
+  };
+  var $ = function (id) { return document.getElementById(id); };
+  var naclSel = $("fw-nacl"), list = $("fw-nacl-rules"), out = $("fw-out");
+  function showRules() {
+    var rules = NACL[naclSel.value].concat([["*", "ALL", "DENY"]]);
+    list.innerHTML = rules.map(function (r) {
+      return '<li class="' + r[2].toLowerCase() + '">' + r[0] + " · " + (r[1] === "ALL" ? "all traffic" : "TCP " + r[1]) + " · " + r[2] + "</li>";
+    }).join("");
+  }
+  function line(ok, txt) { return '<li><span class="' + (ok ? "y" : "n") + '">' + (ok ? "✔" : "✘") + "</span> " + txt + "</li>"; }
+  function send() {
+    var port = +$("fw-port").value;
+    var steps = [], result = true, why = "";
+    // 1. NACL inbound: first match wins
+    var rules = NACL[naclSel.value].concat([["*", "ALL", "DENY"]]);
+    var hit = null;
+    for (var i = 0; i < rules.length; i++) { if (rules[i][1] === "ALL" || rules[i][1] === port) { hit = rules[i]; break; } }
+    var naclOk = hit[2] === "ALLOW";
+    steps.push(line(naclOk, "NACL inbound: rule <b>" + hit[0] + "</b> matched first → " + hit[2]));
+    if (!naclOk) { result = false; why = "Blocked at the subnet. The security group never even sees it."; }
+    // 2. SG inbound
+    if (result) {
+      var sgOk = port === 22 || $("fw-sg8000").checked;
+      steps.push(line(sgOk, "Security group inbound: " + (sgOk ? "a rule allows TCP " + port : "no rule allows TCP " + port + " (security groups only allow; everything else is blocked)")));
+      if (!sgOk) { result = false; why = "Blocked at the instance. The browser just times out."; }
+    }
+    // 3. App answers
+    if (result) {
+      steps.push(line(true, "EC2: " + (port === 22 ? "SSH server" : "Python app") + " receives the request and sends a response"));
+      // 4. SG outbound - stateful
+      var sgOut = $("fw-sgout").checked;
+      steps.push(line(true, "Security group outbound: " + (sgOut ? "allowed" : "no outbound rule, but <b>stateful</b> — it remembers the request, so the reply goes out anyway")));
+      // 5. NACL outbound - stateless
+      var naclOut = $("fw-naclout").checked;
+      steps.push(line(naclOut, "NACL outbound to client's ephemeral port: " + (naclOut ? "rule allows it" : "no matching rule → DENY (<b>stateless</b>: it doesn't remember the request)")));
+      if (!naclOut) { result = false; why = "The request got in, but the reply was dropped at the subnet. Stateless NACLs need rules in both directions."; }
+    }
+    out.className = "output " + (result ? "ok" : "bad");
+    out.innerHTML = '<ul class="trace">' + steps.join("") + "</ul><p style=\"margin:8px 0 0\"><b>" +
+      (result ? "Success — the user gets a response (HTTP 200)." : "Failed. ") + "</b>" + (result ? "" : why) + "</p>";
+  }
+  naclSel.addEventListener("change", showRules);
+  $("fw-go").addEventListener("click", send);
+  showRules();
+})();
+</script>
+</body>
+</html>

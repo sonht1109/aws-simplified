@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS Interview Q&amp;A Collection · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="29">
+<main class="wrap">
+  <header class="page-head">
+    <h1>AWS Interview Q&amp;A Collection</h1>
+    <p class="lead">You've done the theory and the hands-on work. Before an interview you also need a quick-reference you can skim the night before. This lesson covers how to use a large bank of AWS DevOps interview questions well, and gives you a representative set of questions by service, each linked to the lesson that explains it.</p>
+  </header>
+
+  <h2>Why a question bank?</h2>
+  <p>Courses and projects build real skill, but interviews test <i>recall under pressure</i>. A well-organised question bank, roughly 500 questions across about 30 AWS services, gives you:</p>
+  <ul>
+    <li><b>One place to revise.</b> One file per service (e.g. an <code>ecs.md</code>), each a list of questions with short answers.</li>
+    <li><b>A fast gap check.</b> Read a question, try to answer it, then compare. If you couldn't answer it, that's a topic to revisit.</li>
+    <li><b>Job-description targeting.</b> If the posting says "strong ECS experience", go straight to the ECS questions.</li>
+  </ul>
+  <p>Questions in such a bank come in three levels:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Basic / theory</h3><p>"What is…?", "What's the difference between…?" These check that you know the vocabulary.</p></div>
+    <div class="card"><h3>Advanced</h3><p>How things work inside, limits, trade-offs, best practices.</p></div>
+    <div class="card"><h3>Scenario-based</h3><p>"Your app is slow / insecure / expensive. What do you do?" Interviewers increasingly focus on these, because they show real experience.</p></div>
+    <div class="card"><h3>Keep it growing</h3><p>Add questions you meet in real interviews or at work. A shared repo that others can contribute to stays up to date.</p></div>
+  </div>
+
+  <h2>How to prepare</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 210" role="img" aria-label="Study loop: learn the theory, do the hands-on practical, then practise interview answers; gaps found in interview practice send you back to theory">
+      <defs><marker id="arr29" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-blue" x="20" y="40" width="180" height="80" rx="10"/>
+      <text class="s-text-b" x="110" y="74" text-anchor="middle">1. Theory</text>
+      <text class="s-text-s" x="110" y="96" text-anchor="middle">what &amp; why</text>
+      <path class="s-line" d="M200 80 H240" marker-end="url(#arr29)"/>
+      <rect class="s-green" x="244" y="40" width="180" height="80" rx="10"/>
+      <text class="s-text-b" x="334" y="74" text-anchor="middle">2. Practical</text>
+      <text class="s-text-s" x="334" y="96" text-anchor="middle">build it yourself</text>
+      <path class="s-line" d="M424 80 H464" marker-end="url(#arr29)"/>
+      <rect class="s-orange" x="468" y="40" width="192" height="80" rx="10"/>
+      <text class="s-text-ink" x="564" y="74" text-anchor="middle">3. Interview prep</text>
+      <text class="s-text-ink" x="564" y="96" text-anchor="middle" style="font-weight:400">answer out loud</text>
+      <path class="s-line-o" d="M564 120 V170 H110 V124" marker-end="url(#arr29)"/>
+      <text class="s-text-s" x="337" y="190" text-anchor="middle">couldn't answer? that's your next topic to revisit</text>
+    </svg>
+    <figcaption>Split each study session between theory, hands-on work and interview practice, and let the gaps decide what you study next.</figcaption>
+  </figure>
+  <ol class="steps">
+    <li><b>Balance your time.</b> With four hours, spend about two on theory and hands-on work and two on interview prep. Learning ECS today? One hour theory, one hour practical, one hour on ECS questions.</li>
+    <li><b>Answer out loud before reading the answer.</b> Rehearse how <i>you</i> would put it to an interviewer, not the book's wording.</li>
+    <li><b>Tie answers to something you built.</b> "In my project I put the ALB in public subnets and the app in private ones…" sounds more convincing than a definition.</li>
+    <li><b>Interview tomorrow?</b> Skip new labs. Skim the bank for the services in the job description and revise the scenario questions.</li>
+    <li><b>Be honest about gaps.</b> "I haven't hit that scenario yet; here's how I'd approach it" is better than bluffing.</li>
+  </ol>
+  <div class="callout tip"><span class="callout-title">Tip</span>A strong answer has three parts: a <b>one-line definition</b>, <b>how you'd use it</b> (or did use it), and <b>one trade-off or gotcha</b>. Scenario answers add the <b>steps you'd take, in order</b>.</div>
+  <div class="xref-box"><div>More career advice (resume, projects, how to approach the job hunt) is in <a href="31-crack-devops-job.html">Lesson 31</a>. Earlier scenario questions on EC2, IAM and VPC are in <a href="10-interview-ec2-iam-vpc.html">Lesson 10</a>.</div></div>
+
+  <div class="demo" id="demo-cards">
+    <div class="demo-head">Try it: random interview flashcards</div>
+    <div class="demo-body">
+      <p>Pick a service (or "All"), read the question, answer it out loud, then reveal the model answer.</p>
+      <div class="row">
+        <label for="fc-svc">Service</label>
+        <select id="fc-svc"></select>
+        <button class="btn primary" id="fc-next">Next question</button>
+        <button class="btn" id="fc-show">Show answer</button>
+      </div>
+      <div class="output" id="fc-q" style="font-weight:700;white-space:normal">Press "Next question".</div>
+      <div class="output" id="fc-a" style="display:none;margin-top:8px;white-space:normal"></div>
+      <p class="muted" id="fc-meta" style="font-size:13px;margin:8px 0 0"></p>
+    </div>
+  </div>
+
+  <h2>Representative questions by service</h2>
+  <p>A sample of the kind of questions you'll face. Each answer is short on purpose; the linked lesson has the full explanation.</p>
+
+  <h3>Compute, identity and networking</h3>
+  <details><summary>EC2: what's the difference between stopping and terminating an instance?</summary><div><p>Stopping shuts it down but keeps the root EBS volume, so you can start it again (you stop paying for compute, but still pay for storage). Terminating deletes the instance, and by default its root volume too. → <a href="04-ec2.html">Lesson 4</a></p></div></details>
+  <details><summary>IAM: role vs user. When do you use a role?</summary><div><p>A user is a long-lived identity for a person or tool with its own credentials. A role has no permanent credentials; it's <i>assumed</i> and hands out temporary ones. Use roles for EC2/Lambda/other services and for cross-account access, so access keys never sit on a server. → <a href="03-iam.html">Lesson 3</a></p></div></details>
+  <details><summary>VPC: what makes a subnet "public"?</summary><div><p>Its route table has a route <code>0.0.0.0/0</code> to an internet gateway. Private subnets reach the internet outbound through a NAT gateway instead. → <a href="06-vpc.html">Lesson 6</a></p></div></details>
+  <details><summary>Security groups vs NACLs?</summary><div><p>Security groups are attached to instances (ENIs), are stateful and only have allow rules. NACLs are attached to subnets, are stateless (return traffic needs its own rule), support allow and deny, and are evaluated in rule-number order. → <a href="07-security-groups-nacl.html">Lesson 7</a></p></div></details>
+  <details><summary>Scenario: users report the site is down after one AZ failed. How do you prevent this next time?</summary><div><p>Run instances in at least two AZs with an Auto Scaling Group, put a load balancer in front with health checks, and use Multi-AZ for the database. → <a href="09-vpc-production-project.html">Lesson 9</a>, <a href="28-load-balancers.html">Lesson 28</a></p></div></details>
+
+  <h3>Storage, DNS and content delivery</h3>
+  <details><summary>S3: how do you protect against accidental deletes?</summary><div><p>Turn on versioning (deleted objects can be restored), optionally MFA Delete, restrict delete permissions in bucket policies, and replicate critical data. → <a href="11-s3.html">Lesson 11</a></p></div></details>
+  <details><summary>Route 53: CNAME vs alias record?</summary><div><p>A CNAME points a name to another name and can't be used at the zone apex (<code>example.com</code>). An alias is Route 53-specific, works at the apex, points directly to AWS resources such as an ALB or CloudFront, and alias queries to AWS resources are free. → <a href="08-route53.html">Lesson 8</a></p></div></details>
+  <details><summary>CloudFront: users in Asia see slow downloads from a US bucket. Fix?</summary><div><p>Put CloudFront in front of the bucket so content is cached at edge locations near users, and lock the bucket to CloudFront with origin access control. → <a href="21-cloudfront.html">Lesson 21</a></p></div></details>
+
+  <h3>Infrastructure as Code and tooling</h3>
+  <details><summary>CloudFormation vs Terraform?</summary><div><p>Both are declarative IaC. CloudFormation is AWS-only and AWS manages its state for you. Terraform is multi-cloud, uses HCL, and keeps its own state file, which you must store safely (e.g. S3 + DynamoDB lock). → <a href="13-cloudformation.html">Lesson 13</a>, <a href="26-terraform.html">Lesson 26</a></p></div></details>
+  <details><summary>Terraform: why must the state file never go to Git?</summary><div><p>It can contain secrets in plain text, and if two people apply from different copies they overwrite each other. Use a remote backend with locking instead. → <a href="34-eks-terraform.html">Lesson 34</a></p></div></details>
+  <details><summary>AWS CLI: how do you work with several accounts from one laptop?</summary><div><p>Use named profiles (<code>aws configure --profile dev</code>) and pick one with <code>--profile</code> or the <code>AWS_PROFILE</code> variable. → <a href="12-aws-cli.html">Lesson 12</a></p></div></details>
+
+  <h3>CI/CD, monitoring and serverless</h3>
+  <details><summary>What are buildspec.yml and appspec.yml?</summary><div><p><code>buildspec.yml</code> tells CodeBuild how to build and test (phases and commands). <code>appspec.yml</code> tells CodeDeploy how to deploy: which files go where, and which hook scripts to run. → <a href="16-codebuild-ci.html">Lesson 16</a>, <a href="17-codedeploy-cd.html">Lesson 17</a></p></div></details>
+  <details><summary>CloudWatch: how do you get alerted when CPU goes above 80%?</summary><div><p>Create a CloudWatch alarm on the <code>CPUUtilization</code> metric with an 80% threshold and an SNS topic as the action. Memory and disk need the CloudWatch agent (custom metrics). → <a href="18-cloudwatch.html">Lesson 18</a></p></div></details>
+  <details><summary>Lambda: when would you <i>not</i> use it?</summary><div><p>For jobs longer than the 15-minute limit, steady high-traffic workloads where EC2/containers cost less, or apps that need special OS-level control. → <a href="19-lambda.html">Lesson 19</a></p></div></details>
+  <details><summary>Scenario: the bill doubled because of old EBS snapshots. How do you stop it happening again?</summary><div><p>Automate cleanup: a scheduled Lambda (boto3) finds snapshots not linked to any active volume or instance and deletes them, plus budgets and alerts. → <a href="20-cost-optimization.html">Lesson 20</a></p></div></details>
+
+  <h3>Containers, security and compliance</h3>
+  <details><summary>ECS vs EKS?</summary><div><p>ECS is AWS's own simpler orchestrator; EKS is managed Kubernetes, which is portable and has a huge ecosystem but is more complex. Both can run on Fargate. → <a href="23-ecs.html">Lesson 23</a></p></div></details>
+  <details><summary>Where should database passwords live?</summary><div><p>Not in code or environment files. Use Secrets Manager (built-in rotation) or Systems Manager Parameter Store (SecureString, cheaper), with IAM controlling who can read them. → <a href="25-secrets-management.html">Lesson 25</a></p></div></details>
+  <details><summary>How do you find EC2 instances that break a company rule?</summary><div><p>AWS Config: use a managed rule if one exists, or write a custom Lambda rule, and review the compliance dashboard. → <a href="27-aws-config.html">Lesson 27</a></p></div></details>
+  <details><summary>ALB or NLB for a UDP game server?</summary><div><p>NLB: it handles UDP at Layer 4 with very low latency. ALB only understands HTTP(S). → <a href="28-load-balancers.html">Lesson 28</a></p></div></details>
+  <details><summary>Scenario: "How did you migrate an app to AWS?"</summary><div><p>Walk through the phases (prepare, plan, migrate, monitor, optimize) and name the strategy you used for each group of apps, instead of only saying "lift and shift". → <a href="30-cloud-migration.html">Lesson 30</a></p></div></details>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Interviewers can tell memorised definitions from experience. After a definition, add "and here's where I used it…" with a detail from one of your projects. Even a lab project counts if you can explain the decisions you made.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Your interview is tomorrow and the job description stresses ECS. What's the best use of tonight?</div>
+    <div class="opts"><button>Start a brand-new multi-day EKS lab</button><button>Revise the ECS questions and practise answering them out loud</button><button>Read every one of the 500 questions once, quickly</button></div>
+    <div class="explain">With little time, target the services in the job description and rehearse your answers.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Which kind of question are interviewers focusing on more and more?</div>
+    <div class="opts"><button>Spelling of service names</button><button>Pure definitions</button><button>Scenario-based questions</button></div>
+    <div class="explain">Scenarios show whether you can apply knowledge, which is what the job needs.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A question bank is a <b>revision tool</b>, not a replacement for theory and hands-on practice.</li>
+      <li>Split study time between theory, practicals and interview prep; let unanswered questions show you what to study next.</li>
+      <li>Expect basic, advanced and especially <b>scenario-based</b> questions.</li>
+      <li>Answer with definition → how you used it → a trade-off; for scenarios, give ordered steps.</li>
+      <li>Target the services in the job description, and be honest about gaps.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var Q = [
+    ["EC2", "What is an AMI?", "Amazon Machine Image: a template (OS + software + settings) used to launch EC2 instances. You can use AWS's, marketplace ones, or build your own golden AMI."],
+    ["EC2", "Your instance is reachable by IP but the web page won't load. First checks?", "Security group allows port 80/443 from your IP; the web server process is running; the OS firewall; the subnet's route to an internet gateway; NACL rules."],
+    ["IAM", "What does least privilege mean?", "Grant only the permissions needed for the task, nothing more. Start narrow and add as needed, and review regularly."],
+    ["IAM", "How should an EC2 app access S3 without access keys?", "Attach an IAM role (instance profile) with an S3 policy; the SDK picks up temporary credentials automatically."],
+    ["VPC", "What does a NAT gateway do?", "Lets instances in private subnets start outbound internet connections (e.g. updates) while blocking inbound connections from the internet."],
+    ["VPC", "Security group or NACL: which is stateful?", "Security groups are stateful (return traffic allowed automatically). NACLs are stateless."],
+    ["S3", "Name three S3 storage classes and when to use them.", "Standard (frequent access), Standard-IA (infrequent but quick access), Glacier tiers (archive). Lifecycle rules move objects between them."],
+    ["S3", "How do you host a static website?", "Enable static website hosting on the bucket (or better, serve it through CloudFront with origin access control) and upload index.html."],
+    ["IaC", "What does terraform plan show?", "The diff between your code and the state: + create, ~ update in place, - destroy, -/+ replace. Nothing is changed."],
+    ["IaC", "What is drift?", "When real resources were changed outside IaC, so they no longer match the template/state. CloudFormation drift detection or terraform plan reveals it."],
+    ["CI/CD", "CodePipeline vs Jenkins?", "CodePipeline is managed, AWS-native and pay-per-pipeline; Jenkins is self-hosted, hugely extensible and cloud-agnostic but you maintain it."],
+    ["CI/CD", "Where do you keep Docker Hub credentials for CodeBuild?", "In Systems Manager Parameter Store or Secrets Manager, referenced from buildspec.yml, never hard-coded."],
+    ["Monitoring", "Why can't you see EC2 memory usage in CloudWatch by default?", "Memory is inside the OS, which AWS can't see. Install the CloudWatch agent to send it as a custom metric."],
+    ["Serverless", "What triggers a Lambda function?", "Events: S3 uploads, API Gateway requests, EventBridge schedules, SQS messages, AWS Config rules, and more."],
+    ["Containers", "Fargate vs EC2 launch type?", "Fargate: no servers to manage, pay per task. EC2: you manage the instances but get more control and possibly lower cost at scale."],
+    ["Containers", "Why use ECR instead of Docker Hub?", "Private by default, IAM-controlled, in the same network as your workloads, with image scanning and no pull-rate limits for your own images."],
+    ["Security", "Secrets Manager vs Parameter Store?", "Secrets Manager: built-in automatic rotation, higher cost. Parameter Store: cheaper/free tier, stores config and SecureString secrets, no native rotation."],
+    ["Security", "How do you flag EC2 instances without detailed monitoring?", "An AWS Config rule (managed, or custom Lambda) evaluating AWS::EC2::Instance on configuration change."],
+    ["Networking", "ALB vs NLB in one sentence?", "ALB routes HTTP(S) at Layer 7 using path/host/headers; NLB forwards TCP/UDP at Layer 4 with ultra-low latency and static IPs."],
+    ["Networking", "What does a target group health check do?", "Calls each target regularly (e.g. GET /) and stops routing traffic to targets that fail until they recover."],
+    ["Strategy", "What is rehost (lift and shift)?", "Moving an application to AWS as-is with minimal changes. Fastest, but gains little from cloud-native features."],
+    ["Strategy", "What are the five phases of a migration project?", "Prepare, plan, migrate, monitor, optimize. Migrate and monitor repeat for each wave of applications."]
+  ];
+  var sel = document.getElementById("fc-svc"), qEl = document.getElementById("fc-q"), aEl = document.getElementById("fc-a"), meta = document.getElementById("fc-meta");
+  var svcs = ["All"];
+  Q.forEach(function (q) { if (svcs.indexOf(q[0]) < 0) svcs.push(q[0]); });
+  svcs.forEach(function (s) { var o = document.createElement("option"); o.textContent = s; sel.appendChild(o); });
+  var cur = null, lastIdx = -1, seen = 0;
+  function pool() { return Q.filter(function (q) { return sel.value === "All" || q[0] === sel.value; }); }
+  function next() {
+    var p = pool(), i;
+    if (p.length === 1) i = 0;
+    else { do { i = Math.floor(Math.random() * p.length); } while (p[i] === Q[lastIdx]); }
+    cur = p[i]; lastIdx = Q.indexOf(cur); seen++;
+    qEl.textContent = "[" + cur[0] + "] " + cur[1];
+    aEl.style.display = "none";
+    meta.textContent = "Cards seen this session: " + seen + " · " + p.length + " in this deck";
+  }
+  document.getElementById("fc-next").addEventListener("click", next);
+  document.getElementById("fc-show").addEventListener("click", function () {
+    if (!cur) next();
+    aEl.textContent = cur[2]; aEl.style.display = "block";
+  });
+  sel.addEventListener("change", next);
+})();
+</script>
+</body>
+</html>

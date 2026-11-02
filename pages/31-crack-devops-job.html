@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to Land an AWS DevOps Job · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="31">
+<main class="wrap">
+  <header class="page-head">
+    <h1>How to Land an AWS DevOps Job</h1>
+    <p class="lead">Five practical tips for getting hired: what order to learn things in, where certifications fit, how to read job descriptions, how to pick a course and why hands-on practice matters most.</p>
+  </header>
+
+  <p>Many people study AWS for months and still struggle in interviews. Usually they don't lack effort. They learn things in the wrong order, chase the wrong goals, or only watch and never build. The five tips below fix those problems.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 200" role="img" aria-label="Recommended learning order: DevOps foundations, then AWS, then hands-on projects, then interview prep, then certification last">
+      <defs><marker id="arr31" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-blue" x="10" y="50" width="120" height="74" rx="10"/>
+      <text class="s-text-b" x="70" y="80" text-anchor="middle">1. DevOps</text>
+      <text class="s-text-s" x="70" y="100" text-anchor="middle">Linux, Git,</text>
+      <text class="s-text-s" x="70" y="115" text-anchor="middle">Docker, K8s, IaC</text>
+      <path class="s-line" d="M130 87 H148" marker-end="url(#arr31)"/>
+      <rect class="s-orange-soft" x="150" y="50" width="120" height="74" rx="10"/>
+      <text class="s-text-b" x="210" y="80" text-anchor="middle">2. AWS</text>
+      <text class="s-text-s" x="210" y="100" text-anchor="middle">the services</text>
+      <text class="s-text-s" x="210" y="115" text-anchor="middle">DevOps uses</text>
+      <path class="s-line" d="M270 87 H288" marker-end="url(#arr31)"/>
+      <rect class="s-green" x="290" y="50" width="120" height="74" rx="10"/>
+      <text class="s-text-b" x="350" y="80" text-anchor="middle">3. Practicals</text>
+      <text class="s-text-s" x="350" y="100" text-anchor="middle">demos, projects,</text>
+      <text class="s-text-s" x="350" y="115" text-anchor="middle">break &amp; fix</text>
+      <path class="s-line" d="M410 87 H428" marker-end="url(#arr31)"/>
+      <rect class="s-purple" x="430" y="50" width="120" height="74" rx="10"/>
+      <text class="s-text-b" x="490" y="80" text-anchor="middle">4. Interview</text>
+      <text class="s-text-s" x="490" y="100" text-anchor="middle">questions, JDs,</text>
+      <text class="s-text-s" x="490" y="115" text-anchor="middle">scenarios</text>
+      <path class="s-line" d="M550 87 H568" marker-end="url(#arr31)"/>
+      <rect class="s-box2" x="570" y="50" width="120" height="74" rx="10"/>
+      <text class="s-text-b" x="630" y="80" text-anchor="middle">5. Certify</text>
+      <text class="s-text-s" x="630" y="100" text-anchor="middle">optional, to</text>
+      <text class="s-text-s" x="630" y="115" text-anchor="middle">check yourself</text>
+      <text class="s-text-s" x="350" y="160" text-anchor="middle">Job descriptions guide every stage: they tell you what to focus on.</text>
+      <path class="s-dash" d="M20 172 H680"/>
+    </svg>
+    <figcaption>The recommended order. Certifications come last, and the job market decides what you focus on.</figcaption>
+  </figure>
+
+  <h2>Tip 1: Start with DevOps, not with AWS</h2>
+  <p>A common mistake is to open the AWS console on day one and work through service after service. Without DevOps basics, AWS feels abstract. You create a VPC or an EKS cluster without knowing what you'll run on it or why. Many people find it too hard and give up.</p>
+  <p>Get a broad understanding of the popular DevOps tools first:</p>
+  <ul>
+    <li><strong>Linux and shell scripting</strong>: almost every server you touch runs Linux. (See <a href="35-shell-scripting-project.html">Lesson 35</a> for a starter script.)</li>
+    <li><strong>Git</strong>: version control for all code and configuration.</li>
+    <li><strong>Docker and Kubernetes</strong>: how modern apps are packaged and run.</li>
+    <li><strong>Terraform and Ansible</strong>: creating and configuring infrastructure with code.</li>
+  </ul>
+  <p>Then move on to AWS. AWS services will make more sense once you know what problems they solve. EKS is "Kubernetes that AWS runs for you", and CodePipeline is "a CI/CD tool built into AWS".</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>You may need AWS early anyway, for example to launch a Linux virtual machine if your laptop runs Windows. That's fine. Using one EC2 instance as a practice box is different from trying to master AWS first.</div>
+  <div class="xref-box"><div>For how the lessons in this course connect, see <a href="01-course-roadmap.html">Lesson 1: Course Roadmap</a>.</div></div>
+
+  <h2>Tip 2: Certifications come last</h2>
+  <p>Beginners often start by studying for an exam such as <em>Cloud Practitioner</em> or <em>Solutions Architect Associate</em>. Certifications are not useless. But they <strong>check</strong> knowledge you already have, and they can't replace building that knowledge.</p>
+  <p>A better order:</p>
+  <ol class="steps">
+    <li>Learn the concepts, tools and technologies.</li>
+    <li>Do the demos and practicals yourself.</li>
+    <li>Study interview questions and prepare for interviews.</li>
+    <li>If you have time, take a certification to test what you know.</li>
+  </ol>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A driving test. Passing it shows you can drive, but you learn to drive by driving, not by memorising the test. An interviewer cares whether you can do the job.</div>
+
+  <h2>Tip 3: Study job descriptions</h2>
+  <p>DevOps and AWS are both huge. You can't learn everything, so let the job market tell you what matters. Spend 15–20 minutes a day <strong>reading job descriptions (JDs)</strong> instead of only scrolling your feed.</p>
+  <ul>
+    <li>Collect many JDs (around 100 is a good target) for the roles you want.</li>
+    <li>Write down the tools and skills that keep coming up. AI chat tools can help you summarise them.</li>
+    <li>Compare that list with what you know. Every gap is your next thing to study.</li>
+  </ul>
+  <p>Don't copy someone else's path just because a LinkedIn post said a certain certificate got them hired. Base your preparation on the jobs you're applying for.</p>
+
+  <div class="demo" id="demo-jd">
+    <div class="demo-head">Try it: job description gap finder</div>
+    <div class="demo-body">
+      <p>Paste one or more job descriptions below, or load the sample. The tool finds common DevOps/AWS skills in the text. Tap a skill to mark it as <em>"I know this"</em>, and the gap list shows what to study next.</p>
+      <textarea id="jd-text" rows="6" style="width:100%" placeholder="Paste a job description here..."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="jd-scan">Scan</button>
+        <button class="btn" id="jd-sample">Load sample JD</button>
+        <button class="btn" id="jd-clear">Clear</button>
+      </div>
+      <div id="jd-skills" class="row" style="margin-top:10px"></div>
+      <div class="output" id="jd-out">Results appear here.</div>
+    </div>
+  </div>
+
+  <h2>Tip 4: Pick the right course, and follow it in order</h2>
+  <p>There are courses on YouTube, Udemy and many other platforms. Look for courses that are <strong>built around jobs</strong>: real projects and the questions interviewers ask, not trivia or exam tricks. When you have built the same kind of project an interviewer asks about, you can connect their question to something you've done and answer with confidence.</p>
+  <p>Once you choose a course, <strong>follow its order</strong>. Lessons build on each other. If you skip a long video because it looks boring, you may miss a concept that the next lesson depends on.</p>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Jumping between five courses at once usually means finishing none of them. Pick one good path and finish it.</div>
+
+  <h2>Tip 5: Do the practicals</h2>
+  <p>This tip matters most, and people skip it most often. Watching videos and reading theory feels productive, but it doesn't give you real experience. Learners who only watch often say: <em>"I don't understand real-time troubleshooting."</em></p>
+  <p>Troubleshooting comes from hands-on work:</p>
+  <ul>
+    <li>When you do the demo yourself, things <strong>break</strong>: wrong region, missing IAM permission, a port not open, a typo in YAML.</li>
+    <li>When things break, you <strong>investigate and fix them</strong>. Real DevOps engineers do exactly this every day.</li>
+    <li>Each fix becomes a story you can tell in an interview: <em>"I hit this error, here's how I found the cause, and here's how I fixed it."</em></li>
+  </ul>
+  <p>This course has many hands-on lessons, such as <a href="09-vpc-production-project.html">the production VPC project</a>, <a href="16-codebuild-ci.html">CI with CodeBuild</a>, <a href="33-eks-ecommerce-project.html">an e-commerce app on EKS</a> and <a href="34-eks-terraform.html">EKS with Terraform</a>. If you build all of them yourself, you'll have plenty of real problems to talk about.</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Keep a short "issues log" while you practise: the error, the cause and the fix. Read it before interviews. Troubleshooting stories show real experience better than any definition you can recite. For question practice, see <a href="29-interview-qa.html">Lesson 29: AWS Interview Q&amp;A</a>.</div>
+
+  <h2>Quick summary</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Don't</th><th>Do instead</th></tr>
+    <tr><td>Start with AWS services cold</td><td>Learn DevOps basics first (Linux, Git, Docker, Kubernetes, Terraform), then AWS</td></tr>
+    <tr><td>Start with certifications</td><td>Concepts → practicals → interview prep → certification (optional)</td></tr>
+    <tr><td>Follow whatever's trending on social media</td><td>Read JDs, list the common skills, close your gaps</td></tr>
+    <tr><td>Skip lessons or hop between courses</td><td>Pick a job-focused course and follow its order</td></tr>
+    <tr><td>Only watch videos</td><td>Do every demo; break things and fix them</td></tr>
+  </table></div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Where do certifications best fit in your preparation?</div>
+    <div class="opts"><button>First, so you have a goal before learning anything</button><button>In place of doing hands-on demos</button><button>At the end, as a way to check knowledge you've already built</button></div>
+    <div class="explain">A certification checks what you know. Build the knowledge first with concepts, practicals and interview prep, then use the exam to test yourself.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">What's the best way to decide which tools to focus on?</div>
+    <div class="opts"><button>Read many job descriptions and look for the skills that keep appearing</button><button>Learn every AWS service in alphabetical order</button><button>Copy whichever certificate a LinkedIn post recommended</button></div>
+    <div class="explain">Job descriptions show what employers want right now. List the common skills and compare them with what you know.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">Why are hands-on practicals so important?</div>
+    <div class="opts"><button>They are required to sit an AWS exam</button><button>Things break when you build, and fixing them teaches troubleshooting</button><button>They let you skip learning theory</button></div>
+    <div class="explain">Real problems only show up when you build things yourself. Fixing them gives you troubleshooting skills and stories for interviews.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Learn DevOps fundamentals (Linux, shell, Git, Docker, Kubernetes, Terraform/Ansible) before diving deep into AWS.</li>
+      <li>Certifications check knowledge; take them last, not first.</li>
+      <li>Read job descriptions every day, list the common skills, and study your gaps.</li>
+      <li>Choose a job-focused course and follow it in order without skipping.</li>
+      <li>Do every practical yourself. Breaking and fixing things builds troubleshooting skill and interview stories.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var SKILLS = [
+    ["Linux", /\blinux\b|\bunix\b/i], ["Shell scripting", /\bshell\b|\bbash\b|scripting/i],
+    ["Python", /\bpython\b/i], ["Git", /\bgit\b|github|gitlab|bitbucket/i],
+    ["Docker", /\bdocker\b|container/i], ["Kubernetes", /kubernetes|\bk8s\b|\beks\b|\baks\b|\bgke\b/i],
+    ["Helm", /\bhelm\b/i], ["Terraform", /terraform/i], ["Ansible", /ansible/i],
+    ["CloudFormation", /cloudformation/i], ["Jenkins", /jenkins/i],
+    ["CI/CD", /ci\s*\/\s*cd|continuous (integration|delivery|deployment)|pipeline/i],
+    ["AWS (general)", /\baws\b|amazon web services/i], ["EC2", /\bec2\b/i], ["VPC / networking", /\bvpc\b|networking|subnet/i],
+    ["IAM / security", /\biam\b|security|least privilege/i], ["S3", /\bs3\b/i], ["Lambda / serverless", /lambda|serverless/i],
+    ["Monitoring", /cloudwatch|prometheus|grafana|monitoring|observability|datadog/i],
+    ["Logging", /logging|\belk\b|elastic|splunk|loki/i]
+  ];
+  var SAMPLE = "We are hiring a DevOps Engineer (AWS). Responsibilities: build and maintain CI/CD pipelines using Jenkins and GitHub Actions; manage infrastructure as code with Terraform; run containerized workloads with Docker and Kubernetes (EKS) and package them with Helm; administer Linux servers and write Bash or Python scripts for automation; design secure AWS environments (VPC, EC2, S3, IAM); set up monitoring and alerting with CloudWatch, Prometheus and Grafana. Nice to have: Ansible, Lambda.";
+  var known = {};
+  var text = document.getElementById("jd-text"), box = document.getElementById("jd-skills"), out = document.getElementById("jd-out");
+  function render(found) {
+    box.innerHTML = "";
+    if (!found.length) { out.className = "output"; out.textContent = "No common DevOps/AWS skills found. Try pasting a full job description."; return; }
+    found.forEach(function (name) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = name;
+      b.setAttribute("aria-pressed", known[name] ? "true" : "false");
+      b.addEventListener("click", function () { known[name] = !known[name]; render(found); });
+      box.appendChild(b);
+    });
+    var gaps = found.filter(function (n) { return !known[n]; });
+    if (!gaps.length) { out.className = "output ok"; out.innerHTML = "<strong>No gaps.</strong> You know all " + found.length + " skills found. Make sure you have a hands-on project for each one."; }
+    else { out.className = "output bad"; out.innerHTML = "<strong>Found " + found.length + " skills, " + gaps.length + " to study:</strong> " + gaps.join(", ") + ". Tap the ones you already know."; }
+  }
+  function scan() {
+    var t = text.value || "";
+    var found = SKILLS.filter(function (s) { return s[1].test(t); }).map(function (s) { return s[0]; });
+    render(found);
+  }
+  document.getElementById("jd-scan").addEventListener("click", scan);
+  document.getElementById("jd-sample").addEventListener("click", function () { text.value = SAMPLE; scan(); });
+  document.getElementById("jd-clear").addEventListener("click", function () { text.value = ""; known = {}; box.innerHTML = ""; out.className = "output"; out.textContent = "Results appear here."; });
+})();
+</script>
+</body>
+</html>

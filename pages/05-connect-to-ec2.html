@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connecting to EC2 from Windows · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="05">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Connecting to EC2 from Windows</h1>
+    <p class="lead">Log into your Linux server from a Windows laptop in a few minutes, using MobaXterm, PuTTY or the SSH client built into Windows. You'll also learn how SSH keys work and how to fix the most common connection errors.</p>
+  </header>
+
+  <h2>How SSH works, in one minute</h2>
+  <p><strong>SSH (Secure Shell)</strong> is the standard way to open a remote terminal on a Linux server. Everything you type is encrypted on its way across the internet. By default it uses <strong>port 22</strong> (a port is a numbered "door" on a server; each service listens on its own).</p>
+  <p>On EC2, SSH uses the <strong>key pair</strong> you created when launching the instance (<a href="04-ec2.html">Lesson 4</a>):</p>
+  <ul>
+    <li>AWS puts the <strong>public key</strong> on the server, in the file <code>~/.ssh/authorized_keys</code> of the default user.</li>
+    <li>You keep the <strong>private key</strong> file on your laptop.</li>
+    <li>When you connect, the server sends a challenge that only the matching private key can answer. The private key itself never leaves your computer.</li>
+  </ul>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>The public key is a padlock you can hand out to anyone. The private key is the only key that opens it. AWS fits your padlock to the server's door; you keep the key in your pocket.</div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 230" role="img" aria-label="Your laptop with the private key connects over SSH on port 22 through the security group to the EC2 instance holding the public key">
+      <defs><marker id="arr5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="16" y="40" width="190" height="150" rx="12"/>
+      <text class="s-text-b" x="111" y="68" text-anchor="middle">Windows laptop</text>
+      <text class="s-text-s" x="111" y="90" text-anchor="middle">MobaXterm / PuTTY /</text>
+      <text class="s-text-s" x="111" y="106" text-anchor="middle">PowerShell ssh</text>
+      <rect class="s-orange" x="40" y="124" width="142" height="44" rx="8"/>
+      <text class="s-text-ink" x="111" y="151" text-anchor="middle">private key .pem</text>
+      <path class="s-line-o" d="M206 115 H372" marker-end="url(#arr5)"/>
+      <text class="s-text-s" x="288" y="104" text-anchor="middle">SSH · port 22</text>
+      <text class="s-text-s" x="288" y="136" text-anchor="middle">user@public-IP</text>
+      <rect class="s-red" x="376" y="50" width="24" height="130" rx="4"/>
+      <text class="s-text-s" x="388" y="206" text-anchor="middle">port 22 allowed?</text>
+      <rect class="s-blue" x="424" y="40" width="240" height="150" rx="12"/>
+      <text class="s-text-b" x="544" y="68" text-anchor="middle">EC2 instance (Linux)</text>
+      <text class="s-text-s" x="544" y="90" text-anchor="middle">user: ubuntu / ec2-user</text>
+      <rect class="s-green" x="448" y="110" width="192" height="58" rx="8"/>
+      <text class="s-text-b" x="544" y="134" text-anchor="middle">public key</text>
+      <text class="s-text-s" x="544" y="154" text-anchor="middle">~/.ssh/authorized_keys</text>
+    </svg>
+    <figcaption>Four things must line up: the right private key, the right username, the public IP, and a firewall rule allowing port 22.</figcaption>
+  </figure>
+
+  <h2>Before you connect: checklist</h2>
+  <ol class="steps">
+    <li><strong>Instance is "Running"</strong> and has a <strong>public IPv4 address</strong>. At launch, check under Network settings → Edit that "Auto-assign public IP" is enabled.</li>
+    <li><strong>SSH is allowed</strong> in the instance's security group (inbound rule for port 22, ideally from "My IP"). The launch wizard adds this by default. More in <a href="07-security-groups-nacl.html">Lesson 7</a>.</li>
+    <li><strong>You have the private key file</strong> that matches the key pair chosen at launch. It's usually in your Downloads folder.</li>
+    <li><strong>You know the default username</strong>, which depends on the AMI (see table below). It's <em>not</em> your AWS login.</li>
+  </ol>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th>AMI (operating system)</th><th>Default username</th></tr></thead>
+    <tbody>
+      <tr><td>Ubuntu</td><td><code>ubuntu</code></td></tr>
+      <tr><td>Amazon Linux</td><td><code>ec2-user</code></td></tr>
+      <tr><td>Red Hat (RHEL)</td><td><code>ec2-user</code></td></tr>
+      <tr><td>SUSE</td><td><code>ec2-user</code></td></tr>
+      <tr><td>Debian</td><td><code>admin</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>.pem or .ppk?</h2>
+  <p>When you create a key pair, AWS asks for a file format:</p>
+  <div class="grid-2">
+    <div class="card"><h3>.pem</h3><p>The standard OpenSSH format. Works with MobaXterm, the <code>ssh</code> command on Windows/Mac/Linux, and almost everything else. <strong>Pick this if unsure.</strong></p></div>
+    <div class="card"><h3>.ppk</h3><p>PuTTY's own format. Pick it only if you'll use PuTTY. Already have a .pem? Convert it with <strong>PuTTYgen</strong> (comes with PuTTY).</p></div>
+  </div>
+
+  <h2>Option 1: MobaXterm (recommended for Windows)</h2>
+  <p>MobaXterm is a free Windows terminal with a built-in SSH client, saved sessions and a file browser. It's friendlier than PuTTY and uses <code>.pem</code> files directly.</p>
+  <ol class="steps">
+    <li>Search "download MobaXterm", choose the free <strong>Home Edition</strong>, and download the <strong>Installer</strong> version (easier than the portable one).</li>
+    <li>The download is a <code>.zip</code>. Right-click → <strong>Extract All</strong>, open the extracted folder, run the installer, accept and finish.</li>
+    <li>Open MobaXterm → <strong>Session</strong> → <strong>SSH</strong>.</li>
+    <li><strong>Remote host</strong>: your instance's public IP. Tick <strong>Specify username</strong> and enter <code>ubuntu</code> (or the right user for your AMI).</li>
+    <li>Open <strong>Advanced SSH settings</strong> → tick <strong>Use private key</strong> → browse to your <code>.pem</code> file.</li>
+    <li>Click <strong>OK</strong>. On the first connection, accept the server's host key. You're in. Try <code>sudo apt update</code>.</li>
+  </ol>
+  <p>The session is saved in the left panel, so next time it's one double-click. (If you stop and start the instance, its public IP changes, so edit the session.)</p>
+
+  <h2>Option 2: PuTTY</h2>
+  <ol class="steps">
+    <li>Install PuTTY (it includes PuTTYgen).</li>
+    <li>If your key is <code>.pem</code>: open <strong>PuTTYgen</strong> → <strong>Load</strong> (set the file filter to "All files") → pick the .pem → <strong>Save private key</strong> as <code>.ppk</code>.</li>
+    <li>In PuTTY, set <strong>Host Name</strong> to <code>ubuntu@&lt;PUBLIC-IP&gt;</code>, port <strong>22</strong>.</li>
+    <li>Go to <strong>Connection → SSH → Auth → Credentials</strong> and choose your <code>.ppk</code> as the private key file.</li>
+    <li>(Optional) Back in <strong>Session</strong>, give it a name and <strong>Save</strong>. Then click <strong>Open</strong> and accept the host key.</li>
+  </ol>
+
+  <h2>Option 3: the ssh command (no install)</h2>
+  <p>Windows 10 and 11 ship with an OpenSSH client, the same <code>ssh</code> command Mac and Linux users have. Open PowerShell in the folder with your key:</p>
+<pre><code>ssh -i .\aws-login.pem ubuntu@&lt;PUBLIC-IP&gt;</code></pre>
+  <p><code>-i</code> means "identity file", i.e. which private key to use. Then comes <code>username@address</code>.</p>
+
+  <h3>Key file permissions</h3>
+  <p>SSH refuses a private key that other users on your computer could read, with a warning like <em>"UNPROTECTED PRIVATE KEY FILE"</em> or <em>"permissions are too open"</em>. Lock it down so only you can read it.</p>
+  <p>Mac / Linux:</p>
+<pre><code>chmod 400 aws-login.pem     # owner can read; nobody else can do anything</code></pre>
+  <p>Windows PowerShell:</p>
+<pre><code>icacls.exe .\aws-login.pem /reset
+icacls.exe .\aws-login.pem /grant:r "$($env:USERNAME):(R)"
+icacls.exe .\aws-login.pem /inheritance:r</code></pre>
+  <p>(<code>chmod 600</code> also works on Mac/Linux: owner read + write.) MobaXterm and PuTTY handle this for you.</p>
+
+  <div class="demo" id="demo-ssh">
+    <div class="demo-head">Try it: SSH command builder</div>
+    <div class="demo-body">
+      <p>Fill in your details to get the exact commands or settings to use.</p>
+      <div class="row">
+        <label for="sb-os" style="min-width:70px">Your tool</label>
+        <select id="sb-os">
+          <option value="win">Windows PowerShell</option>
+          <option value="unix">Mac / Linux terminal</option>
+          <option value="moba">MobaXterm</option>
+          <option value="putty">PuTTY</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="sb-ami" style="min-width:70px">AMI</label>
+        <select id="sb-ami">
+          <option value="ubuntu">Ubuntu</option>
+          <option value="ec2-user">Amazon Linux</option>
+          <option value="ec2-user|rhel">Red Hat</option>
+          <option value="ec2-user|suse">SUSE</option>
+          <option value="admin">Debian</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="sb-key" style="min-width:70px">Key file</label>
+        <input type="text" id="sb-key" value="aws-login.pem" style="flex:1 1 160px" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="sb-ip" style="min-width:70px">Public IP</label>
+        <input type="text" id="sb-ip" placeholder="e.g. 3.110.25.14" style="flex:1 1 160px" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="output" id="sb-out" style="white-space:pre-wrap;font-family:var(--mono);font-size:14px;overflow-x:auto">Enter your instance's public IP.</div>
+    </div>
+  </div>
+
+  <h2>When it doesn't work</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Message</th><th>Usual cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td><code>Connection timed out</code></td><td>Traffic never reaches the server</td><td>Check the instance is running, you're using the <em>public</em> IP, and the security group allows port 22 from your IP.</td></tr>
+      <tr><td><code>Permission denied (publickey)</code></td><td>Server rejected your login</td><td>Wrong username for the AMI, or the wrong key file (not the one chosen at launch).</td></tr>
+      <tr><td><code>UNPROTECTED PRIVATE KEY FILE</code></td><td>Key file is readable by others</td><td>Run <code>chmod 400</code> (Mac/Linux) or the <code>icacls</code> commands (Windows).</td></tr>
+      <tr><td><code>Are you sure you want to continue connecting?</code></td><td>First time seeing this server</td><td>Normal. Type <code>yes</code>. The server's fingerprint is saved for next time.</td></tr>
+      <tr><td>Worked yesterday, not today</td><td>You stopped/started the instance</td><td>The public IP changed. Copy the new one from the console.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout tip"><span class="callout-title">Tip: no key handy?</span>For a quick check, the EC2 console's <strong>Connect</strong> button offers <strong>EC2 Instance Connect</strong>, a terminal in your browser. It works on supported AMIs (like Ubuntu and Amazon Linux) when port 22 is reachable from AWS's Instance Connect service. Learning a real SSH client is still worth it: you'll use it daily.</div>
+
+  <div class="callout warn"><span class="callout-title">Watch out</span>Treat the private key like a password. Don't email it, commit it to Git or paste it into chat. If it leaks, create a new key pair and replace the public key on the server.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">You run <code>ssh -i key.pem ec2-user@1.2.3.4</code> against an Ubuntu instance and get "Permission denied (publickey)". Most likely fix?</div>
+    <div class="opts"><button>Open port 22 in the security group</button><button>Convert the key to .ppk</button><button>Use the username <code>ubuntu</code> instead of <code>ec2-user</code></button></div>
+    <div class="explain">"Permission denied" means you reached the server (so the port is open) but the login was rejected. Ubuntu AMIs use <code>ubuntu</code>.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which key file format does PuTTY need?</div>
+    <div class="opts"><button>.ppk (convert a .pem with PuTTYgen)</button><button>.pem only</button><button>.csv</button></div>
+    <div class="explain">PuTTY uses its own .ppk format. MobaXterm and the ssh command use .pem directly.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">The connection just hangs and then says "Connection timed out". What should you check first?</div>
+    <div class="opts"><button>The key file permissions</button><button>The security group inbound rule for port 22 and that you're using the public IP</button><button>Your AWS console password</button></div>
+    <div class="explain">A timeout means packets aren't reaching the server at all, which is usually a firewall rule or the wrong/missing public IP.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>SSH gives you an encrypted remote terminal on port 22; EC2 uses key pairs instead of passwords.</li>
+      <li>The server holds the public key; you keep the private key (.pem for most tools, .ppk for PuTTY).</li>
+      <li>On Windows, use MobaXterm (easiest), PuTTY, or the built-in <code>ssh</code> in PowerShell.</li>
+      <li>The command is <code>ssh -i key.pem user@public-ip</code>, and the user depends on the AMI (<code>ubuntu</code>, <code>ec2-user</code>, <code>admin</code>…).</li>
+      <li>Lock down key permissions; "timed out" = network/firewall, "permission denied" = wrong user or key.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var out = document.getElementById("sb-out");
+  var ids = ["sb-os", "sb-ami", "sb-key", "sb-ip"];
+  function val(id) { return document.getElementById(id).value.trim(); }
+  function validHost(h) {
+    var ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+    if (ip) return ip.slice(1).every(function (n) { return +n <= 255; });
+    return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(h);
+  }
+  function isPrivate(h) {
+    return /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h);
+  }
+  function render() {
+    var os = val("sb-os");
+    var user = val("sb-ami").split("|")[0];
+    var key = val("sb-key") || "aws-login.pem";
+    var host = val("sb-ip");
+    out.className = "output";
+    if (!host) { out.textContent = "Enter your instance's public IP."; return; }
+    if (!validHost(host)) {
+      out.className = "output bad";
+      out.textContent = "That doesn't look like an IP address or hostname. Copy the \"Public IPv4 address\" from the EC2 console.";
+      return;
+    }
+    var lines = [];
+    if (isPrivate(host)) lines.push("# Warning: " + host + " is a PRIVATE IP. It only works inside AWS.\n# Use the instance's public IPv4 address instead.\n");
+    var keyBase = key.replace(/^.*[\\\/]/, "");
+    var ppk = keyBase.replace(/\.pem$/i, "") + ".ppk";
+    var q = /\s/.test(key) ? "\"" : "";
+    if (os === "unix") {
+      lines.push("# 1. lock down the key (once)");
+      lines.push("chmod 400 " + q + key + q);
+      lines.push("");
+      lines.push("# 2. connect");
+      lines.push("ssh -i " + q + key + q + " " + user + "@" + host);
+    } else if (os === "win") {
+      var wkey = /^[a-z]:|^[\\\/.]/i.test(key) ? key : ".\\" + key;
+      var wq = /\s/.test(wkey) ? "\"" : "";
+      lines.push("# 1. lock down the key (once, in PowerShell)");
+      lines.push("icacls.exe " + wq + wkey + wq + " /reset");
+      lines.push("icacls.exe " + wq + wkey + wq + " /grant:r \"$($env:USERNAME):(R)\"");
+      lines.push("icacls.exe " + wq + wkey + wq + " /inheritance:r");
+      lines.push("");
+      lines.push("# 2. connect");
+      lines.push("ssh -i " + wq + wkey + wq + " " + user + "@" + host);
+    } else if (os === "moba") {
+      lines.push("Session > SSH");
+      lines.push("  Remote host:        " + host);
+      lines.push("  Specify username:   " + user);
+      lines.push("  Port:               22");
+      lines.push("Advanced SSH settings");
+      lines.push("  Use private key:    " + keyBase);
+      lines.push("Click OK, then accept the host key.");
+    } else {
+      if (/\.pem$/i.test(keyBase)) lines.push("PuTTYgen: Load " + keyBase + " > Save private key as " + ppk + "\n");
+      lines.push("Session");
+      lines.push("  Host Name:  " + user + "@" + host);
+      lines.push("  Port:       22");
+      lines.push("Connection > SSH > Auth > Credentials");
+      lines.push("  Private key file:  " + (/\.ppk$/i.test(keyBase) ? keyBase : ppk));
+      lines.push("Click Open, then accept the host key.");
+    }
+    out.textContent = lines.join("\n");
+  }
+  ids.forEach(function (id) {
+    var el = document.getElementById(id);
+    el.addEventListener("input", render);
+    el.addEventListener("change", render);
+  });
+})();
+</script>
+</body>
+</html>

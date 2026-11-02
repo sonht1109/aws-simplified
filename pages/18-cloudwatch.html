@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CloudWatch: Metrics, Logs, Alarms · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .cw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 8px; }
+  .cw-grid label { display: block; font-size: 14px; color: var(--text-2); }
+  .cw-state { display: inline-block; font: 700 13px var(--mono); padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); }
+  .cw-state.ok { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+  .cw-state.alarm { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+  .cw-chart { width: 100%; height: auto; display: block; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; margin-top: 10px; }
+  .inbox { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+  .inbox li { margin: 0; padding: 8px 10px; border: 1px solid var(--border); border-left: 4px solid var(--red); border-radius: 8px; background: var(--surface); font-size: 14px; }
+  .inbox li.note { border-left-color: var(--text-2); color: var(--text-2); }
+  .inbox small { display: block; color: var(--text-2); }
+</style>
+</head>
+<body data-page="18">
+<main class="wrap">
+  <header class="page-head">
+    <h1>CloudWatch: Metrics, Logs, Alarms</h1>
+    <p class="lead">CloudWatch is AWS's built-in monitoring service. It collects numbers (metrics) and text records (logs) from your resources, shows them on graphs and dashboards, and alerts you when something goes wrong. That way nobody has to watch servers 24/7.</p>
+  </header>
+
+  <h2>What CloudWatch is</h2>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A security guard for a property. When you come back you can ask, "What happened while I was away?" The guard can also be told, "If you see smoke, call me right away." CloudWatch does both for your AWS account: it keeps a record of what happened and raises the alarm when a rule is broken.</div>
+  <p>In one sentence for an interview: <i>CloudWatch is the AWS service for <b>monitoring, alerting, reporting and logging</b> of your resources and applications.</i> Its main features:</p>
+  <ul>
+    <li><b>Metrics</b>: numbers measured over time, like CPU %, network bytes, request count. Many are collected automatically.</li>
+    <li><b>Alarms</b>: rules on a metric ("if CPU ≥ 80%…") that trigger an action such as an email or scaling out.</li>
+    <li><b>Logs</b> (plus <b>Logs Insights</b> for searching them): text output from services and apps.</li>
+    <li><b>Custom metrics</b>: your own numbers, for things AWS doesn't measure by default.</li>
+    <li><b>Dashboards</b>: your chosen graphs on one screen.</li>
+  </ul>
+  <p>CloudWatch doesn't scale servers or cut costs by itself, but it's what <i>triggers</i> those actions. For example, an alarm can tell an Auto Scaling group to add a server, or a schedule can start a Lambda function that cleans up waste (see <a href="20-cost-optimization.html">Lesson 20</a>).</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 260" role="img" aria-label="EC2, CodeBuild and your application send metrics and logs into CloudWatch. A metric alarm publishes to an SNS topic which emails the team, or triggers Auto Scaling.">
+      <defs><marker id="arr18" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="10" y="30" width="120" height="46" rx="8"/>
+      <text class="s-text-b" x="70" y="58" text-anchor="middle">EC2</text>
+      <rect class="s-box2" x="10" y="106" width="120" height="46" rx="8"/>
+      <text class="s-text-b" x="70" y="134" text-anchor="middle">CodeBuild</text>
+      <rect class="s-box2" x="10" y="182" width="120" height="46" rx="8"/>
+      <text class="s-text-b" x="70" y="210" text-anchor="middle">Your app</text>
+      <rect class="s-orange-soft" x="165" y="12" width="215" height="236" rx="10"/>
+      <text class="s-text-b" x="272" y="34" text-anchor="middle">CloudWatch</text>
+      <rect class="s-box" x="185" y="48" width="175" height="44" rx="6"/>
+      <text class="s-text-b" x="272" y="68" text-anchor="middle">Metrics</text>
+      <text class="s-text-s" x="272" y="84" text-anchor="middle">CPUUtilization…</text>
+      <rect class="s-box" x="185" y="112" width="175" height="44" rx="6"/>
+      <text class="s-text-b" x="272" y="132" text-anchor="middle">Logs</text>
+      <text class="s-text-s" x="272" y="148" text-anchor="middle">log groups / streams</text>
+      <rect class="s-box" x="185" y="176" width="175" height="44" rx="6"/>
+      <text class="s-text-b" x="272" y="203" text-anchor="middle">Dashboards</text>
+      <path class="s-line" d="M130 53 H182" marker-end="url(#arr18)"/>
+      <path class="s-line" d="M130 129 H182" marker-end="url(#arr18)"/>
+      <path class="s-line" d="M130 205 C 160 205, 155 80, 182 80" marker-end="url(#arr18)"/>
+      <text class="s-text-s" x="136" y="166">custom</text>
+      <path class="s-line-o" d="M360 70 H412" marker-end="url(#arr18)"/>
+      <rect class="s-red" x="415" y="48" width="110" height="44" rx="8"/>
+      <text class="s-text-b" x="470" y="75" text-anchor="middle">Alarm</text>
+      <path class="s-line-o" d="M525 70 H557" marker-end="url(#arr18)"/>
+      <rect class="s-purple" x="560" y="48" width="110" height="44" rx="8"/>
+      <text class="s-text-b" x="615" y="68" text-anchor="middle">SNS topic</text>
+      <text class="s-text-s" x="615" y="84" text-anchor="middle">notify</text>
+      <path class="s-line" d="M615 92 V137" marker-end="url(#arr18)"/>
+      <rect class="s-box" x="560" y="140" width="110" height="44" rx="8"/>
+      <text class="s-text-b" x="615" y="167" text-anchor="middle">Email</text>
+      <path class="s-line" d="M470 92 V137" marker-end="url(#arr18)"/>
+      <rect class="s-green" x="415" y="140" width="110" height="44" rx="8"/>
+      <text class="s-text-b" x="470" y="167" text-anchor="middle">Auto Scaling</text>
+    </svg>
+    <figcaption>Data flows in as metrics and logs. Alarms watch metrics and act: notify people through SNS, or call other services.</figcaption>
+  </figure>
+
+  <h2>Monitoring vs logging</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Monitoring (metrics)</h3><p>Watching <b>numbers over time</b> to answer "how healthy is it right now?" Example: CPU was 35% at 10:00, 92% at 10:05. Small, regular data points that are easy to graph and alert on.</p></div>
+    <div class="card"><h3>Logging</h3><p>Keeping <b>text records of events</b> to answer "what exactly happened?" Example: <code>ERROR: Could not open requirements.txt</code>. Detailed, used for debugging and audits.</p></div>
+  </div>
+  <p>You need both. A metric tells you <i>that</i> something is wrong ("CPU at 100%"), and logs help you find out <i>why</i>.</p>
+  <div class="callout"><span class="callout-title">Note</span>The record of <i>who called which AWS API</i> (e.g. "user X deleted bucket Y at 14:02") is kept by a sister service, <b>AWS CloudTrail</b>. CloudTrail can also deliver those records into CloudWatch Logs so you can search and alarm on them there.</div>
+
+  <h2>Logs: log groups and streams</h2>
+  <p>Many AWS services send their logs to CloudWatch Logs automatically, with no setup. Logs are organised in two levels:</p>
+  <ul>
+    <li><b>Log group</b>: one per source, e.g. one per CodeBuild project (<code>/aws/codebuild/sample-python-flask-service</code>) or one per Lambda function. This stops 100 projects' logs from mixing together.</li>
+    <li><b>Log stream</b>: one sequence of events inside a group, e.g. one build run.</li>
+  </ul>
+  <p>Example: open the log group of the CodeBuild project from <a href="16-codebuild-ci.html">Lesson 16</a>. Every build is there: the successful ones with the full Docker build output, and the early failed one with <code>Could not open requirements file</code>. The logs stay there even if you delete the CodeBuild project. By default log groups keep data forever, so set a <b>retention period</b> to control storage cost.</p>
+  <p><b>Logs Insights</b> lets you query logs with a small query language, for example to find the latest errors:</p>
+<pre><code>fields @timestamp, @message
+| filter @message like /ERROR/
+| sort @timestamp desc
+| limit 20</code></pre>
+
+  <h2>Metrics</h2>
+  <p>Out of the box, CloudWatch tracks <b>over a thousand metrics</b> across the services in an account, grouped by service (<i>namespace</i>, e.g. <code>AWS/EC2</code>). For EC2 you'll find <code>CPUUtilization</code>, <code>NetworkIn</code>/<code>NetworkOut</code>, disk I/O, CPU credit usage and more, either per instance or across all instances. You only need the few that matter for your project.</p>
+  <p>You can see the same data on the EC2 console's <b>Monitoring</b> tab. That view is CloudWatch underneath.</p>
+  <h3>How often: basic vs detailed monitoring</h3>
+  <ul>
+    <li><b>Basic monitoring</b> (free): EC2 sends metrics every <b>5 minutes</b>.</li>
+    <li><b>Detailed monitoring</b> (paid): every <b>1 minute</b>. Enable it from the instance's Monitoring tab → <i>Manage detailed monitoring</i>.</li>
+  </ul>
+  <h3>Statistic and period: Average vs Maximum</h3>
+  <p>A graph point is a <b>statistic</b> (Average, Maximum, Minimum, Sum…) over a <b>period</b> (1 min, 5 min…). This choice matters:</p>
+  <ul>
+    <li><b>Maximum</b> catches every brief spike. Good for demos, but noisy: CPU touching 100% for one second isn't a real problem.</li>
+    <li><b>Average</b> over e.g. 5 minutes shows sustained pressure. Production alarms usually use Average, so CPU stuck above 70% for 5+ minutes pages someone and a one-second blip doesn't.</li>
+  </ul>
+
+  <h3>Custom metrics</h3>
+  <p>Some things are <b>not</b> collected by default. The classic example is <b>memory usage</b> on EC2: AWS can see the CPU from outside your instance, but not how much RAM your programs use inside it. To track that, or any application number like "orders per minute", something has to <i>send</i> it to CloudWatch. That's a <b>custom metric</b>. You can send one with the CloudWatch agent installed on the server, or from your own code or the CLI:</p>
+<pre><code>aws cloudwatch put-metric-data \
+  --namespace "MyApp" \
+  --metric-name MemoryUsedPercent \
+  --unit Percent \
+  --value 63</code></pre>
+  <p>Once it's in CloudWatch, a custom metric works like any built-in one: graphs, dashboards, alarms.</p>
+
+  <h2>Alarms and SNS notifications</h2>
+  <p>Collecting metrics is only half the job. Engineers can't stare at graphs all day, so an <b>alarm</b> watches a metric for you and acts when it crosses a <b>threshold</b>. An alarm is always in one of three states:</p>
+  <div class="table-wrap"><table>
+    <tr><th>State</th><th>Meaning</th></tr>
+    <tr><td><code>OK</code></td><td>Metric is within the threshold.</td></tr>
+    <tr><td><code>ALARM</code></td><td>Metric crossed the threshold for the required number of periods, so actions fire.</td></tr>
+    <tr><td><code>INSUFFICIENT_DATA</code></td><td>Not enough data yet (just created, instance stopped, metric not arriving).</td></tr>
+  </table></div>
+  <p>The usual action is to send a message through <b>Amazon SNS (Simple Notification Service)</b>. You create an SNS <b>topic</b>, which is a named channel, and add <b>subscriptions</b>: who gets messages and how (email, SMS, Slack via a webhook or chat integration, a Lambda function…). The alarm publishes to the topic, and SNS delivers the message to every subscriber.</p>
+
+  <div class="demo" id="demo-cw">
+    <div class="demo-head">Try it: CPU alarm → SNS email</div>
+    <div class="demo-body">
+      <p>Each tick is one 1-minute period with six samples. Drag the CPU load up past the threshold and watch the alarm change state and "send" an email. Then compare Average and Maximum with a load just under the threshold: occasional spikes trip Maximum but not Average.</p>
+      <div class="cw-grid">
+        <div><label for="cw-load">CPU load: <b id="cw-load-v">20</b>%</label><input type="range" id="cw-load" min="0" max="100" value="20"></div>
+        <div><label for="cw-th">Threshold (≥ %)</label><input type="number" id="cw-th" min="5" max="100" value="50" style="width:90px"></div>
+        <div><label for="cw-stat">Statistic</label><select id="cw-stat"><option>Average</option><option>Maximum</option></select></div>
+      </div>
+      <label><input type="checkbox" id="cw-conf" checked style="accent-color:var(--orange)"> Email subscription confirmed</label>
+      <div class="row" style="margin-top:8px"><button class="btn" id="cw-pause">Pause</button><span>Alarm state: <span class="cw-state" id="cw-state">INSUFFICIENT_DATA</span></span><span class="muted" id="cw-last"></span></div>
+      <svg class="cw-chart" id="cw-chart" viewBox="0 0 340 150" role="img" aria-label="CPU utilization chart"></svg>
+      <div class="output" style="padding-top:6px"><b>Inbox</b><ul class="inbox" id="cw-inbox"><li class="note">No messages yet.</li></ul></div>
+    </div>
+  </div>
+
+  <h2>Hands-on: alert when EC2 CPU spikes</h2>
+  <ol class="steps">
+    <li><b>Launch an instance.</b> Ubuntu, <code>t2.micro</code>, public IP. Turn on <b>detailed monitoring</b> so metrics arrive every minute instead of every five.</li>
+    <li><b>Look at the metric.</b> CloudWatch → Metrics → All metrics → EC2 → Per-Instance Metrics → your instance ID → <code>CPUUtilization</code>. It's flat near 0% for now.</li>
+    <li><b>Create the alarm.</b> Alarms → <i>Create alarm</i> → select that metric. Statistic <b>Maximum</b>, period <b>1 minute</b> (just for a quick demo; use Average over 5 minutes in real life). Condition: <i>Greater/Equal</i> than <b>50</b>.</li>
+    <li><b>Add the notification.</b> Action: "In alarm" → <i>Create new topic</i> (e.g. <code>cloudwatch-topic</code>) → your email address. Give the alarm a clear name and description, e.g. <i>"Priority: EC2 CPU ≥ 50%. Automated notification from CloudWatch, please take action."</i></li>
+    <li><b>Confirm the subscription.</b> AWS emails a confirmation link. Until you click it, nothing is delivered. Check spam and promotions folders. You can see the status under SNS → Topics → Subscriptions ("Confirmed").</li>
+    <li><b>Generate load.</b> SSH in and burn some CPU, then stop it:
+<pre><code>yes &gt; /dev/null &amp;     # start a CPU-hungry process
+top                    # watch CPU climb (q to quit)
+pkill yes              # stop it</code></pre></li>
+    <li><b>Watch it fire.</b> Within a minute or two the alarm goes red (<code>ALARM</code>) and the email arrives with the metric, threshold and time.</li>
+  </ol>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Never run CPU-burning scripts on a production server or your work laptop. At 100% CPU the machine becomes unresponsive. Use a throwaway demo instance and terminate it afterwards.</div>
+
+  <h2>Dashboards</h2>
+  <p>A <b>dashboard</b> puts the graphs you care about on one page: a line chart of CPU for all web servers, a number widget for error count, an alarm status widget. Each widget can show one metric or several, as lines, stacked areas, bars or pie charts. Teams often put one on a TV in the office or use it as the first page they check during an incident.</p>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Interviewers like real problems you've run into. Good examples from this lab: metrics showing up a few minutes late (basic monitoring is every 5 minutes); an alarm stuck in <code>INSUFFICIENT_DATA</code>; alert emails never arriving because the SNS subscription wasn't confirmed or they landed in spam; choosing Average over Maximum to avoid false alarms; and memory not being a default EC2 metric, so it needs a custom metric.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">You want to alert on EC2 memory usage, but there's no memory metric in CloudWatch. Why?</div>
+    <div class="opts"><button>Memory metrics are only on Windows instances</button><button>You need detailed monitoring enabled</button><button>Memory isn't collected by default; you must send it as a custom metric</button></div>
+    <div class="explain">AWS can't see RAM usage from outside the instance. Use the CloudWatch agent (or <code>put-metric-data</code>) to publish it as a custom metric.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Your alarm is created but no email ever arrives, even in ALARM state. What do you check first?</div>
+    <div class="opts"><button>Whether the SNS email subscription was confirmed</button><button>Whether the instance has a public IP</button><button>Whether the log group has a retention period</button></div>
+    <div class="explain">SNS won't deliver to an email address until the subscription is confirmed via the link AWS sends (check spam and promotions too).</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">For a production CPU alarm, which setting avoids paging people for one-second spikes?</div>
+    <div class="opts"><button>Maximum over 1 minute</button><button>Average over 5 minutes</button><button>Minimum over 1 minute</button></div>
+    <div class="explain">Average over a few minutes only fires on sustained load. Maximum fires on every brief spike.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>CloudWatch handles monitoring, alerting, reporting and logging for AWS resources and apps.</li>
+      <li><b>Metrics</b> are numbers over time (monitoring); <b>logs</b> are text records of events (debugging). Logs live in log groups → log streams.</li>
+      <li>EC2 sends metrics every 5 minutes by default, or every 1 minute with detailed monitoring. Memory needs a <b>custom metric</b>.</li>
+      <li><b>Alarms</b> watch a metric against a threshold (OK / ALARM / INSUFFICIENT_DATA) and act, usually by publishing to an <b>SNS topic</b> that emails subscribers.</li>
+      <li>Use Average over several minutes in production, confirm SNS subscriptions, and use dashboards to see everything at a glance.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var load = document.getElementById("cw-load"), loadV = document.getElementById("cw-load-v");
+  var thEl = document.getElementById("cw-th"), statEl = document.getElementById("cw-stat");
+  var conf = document.getElementById("cw-conf"), stateEl = document.getElementById("cw-state");
+  var lastEl = document.getElementById("cw-last"), chart = document.getElementById("cw-chart");
+  var inbox = document.getElementById("cw-inbox"), pauseBtn = document.getElementById("cw-pause");
+  var NS = "http://www.w3.org/2000/svg";
+  var history = [], state = "INSUFFICIENT_DATA", minute = 0, timer = null, firstMsg = true;
+
+  function clamp(v) { return Math.max(0, Math.min(100, v)); }
+  function threshold() { var t = parseFloat(thEl.value); return isNaN(t) ? 50 : clamp(t); }
+
+  function sample() {
+    var base = parseFloat(load.value), s = [];
+    for (var i = 0; i < 6; i++) {
+      var v = base + (Math.random() * 10 - 5);
+      if (Math.random() < 0.15) v += 20 + Math.random() * 25; // brief spike
+      s.push(clamp(v));
+    }
+    return s;
+  }
+
+  function el(tag, attrs, text) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function draw() {
+    var th = threshold();
+    while (chart.firstChild) chart.removeChild(chart.firstChild);
+    var top = 10, h = 110, left = 30, bw = 13, gap = 1.5;
+    [0, 50, 100].forEach(function (v) {
+      var y = top + h - v / 100 * h;
+      chart.appendChild(el("line", { x1: left, x2: 335, y1: y, y2: y, style: "stroke:var(--border);stroke-width:1" }));
+      chart.appendChild(el("text", { x: left - 4, y: y + 4, "text-anchor": "end", style: "fill:var(--text-2);font:12px var(--font)" }, v));
+    });
+    history.forEach(function (d, i) {
+      var v = d.value, bh = v / 100 * h;
+      chart.appendChild(el("rect", { x: left + 4 + i * (bw + gap), y: top + h - bh, width: bw, height: Math.max(bh, 1), rx: 2,
+        style: "fill:" + (v >= th ? "var(--red)" : "var(--blue)") }));
+    });
+    var ty = top + h - th / 100 * h;
+    chart.appendChild(el("line", { x1: left, x2: 335, y1: ty, y2: ty, style: "stroke:var(--red);stroke-width:2;stroke-dasharray:5 4" }));
+    chart.appendChild(el("text", { x: 335, y: ty - 4, "text-anchor": "end", style: "fill:var(--red);font:700 12px var(--font)" }, "threshold " + th + "%"));
+    chart.appendChild(el("text", { x: left + 4, y: 142, style: "fill:var(--text-2);font:12px var(--font)" }, "CPUUtilization (" + statEl.value + ", 1-min periods)"));
+  }
+
+  function deliver(html, isNote) {
+    if (firstMsg) { inbox.innerHTML = ""; firstMsg = false; }
+    var li = document.createElement("li");
+    if (isNote) li.className = "note";
+    li.innerHTML = html;
+    inbox.insertBefore(li, inbox.firstChild);
+    while (inbox.children.length > 5) inbox.removeChild(inbox.lastChild);
+  }
+
+  function tick() {
+    minute++;
+    var s = sample(), value;
+    if (statEl.value === "Maximum") value = Math.max.apply(null, s);
+    else value = s.reduce(function (a, b) { return a + b; }, 0) / s.length;
+    value = Math.round(value * 10) / 10;
+    history.push({ value: value });
+    if (history.length > 20) history.shift();
+    var th = threshold();
+    var next = value >= th ? "ALARM" : "OK";
+    if (next !== state) {
+      if (next === "ALARM") {
+        if (conf.checked) {
+          deliver("<b>ALARM: \"ec2-cpu-high\"</b><small>Hey team, this is an automated notification from CloudWatch. CPUUtilization " + statEl.value.toLowerCase() + " = " + value + "% (≥ " + th + "%) at minute " + minute + ". Please take action.</small>");
+        } else {
+          deliver("SNS: subscription is <b>pending confirmation</b>, so the alarm email was not delivered.", true);
+        }
+      }
+      state = next;
+    }
+    stateEl.textContent = state;
+    stateEl.className = "cw-state " + (state === "ALARM" ? "alarm" : "ok");
+    lastEl.textContent = "Last datapoint: " + value + "%";
+    draw();
+  }
+
+  load.addEventListener("input", function () { loadV.textContent = load.value; });
+  thEl.addEventListener("change", draw);
+  statEl.addEventListener("change", draw);
+  pauseBtn.addEventListener("click", function () {
+    if (timer) { clearInterval(timer); timer = null; pauseBtn.textContent = "Resume"; }
+    else { timer = setInterval(tick, 1000); pauseBtn.textContent = "Pause"; }
+  });
+  draw();
+  timer = setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three-Tier Architecture on AWS · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  #tier-svg .tier { cursor: pointer; }
+  #tier-svg .tier:hover rect, #tier-svg .tier:focus rect { stroke-width: 3; }
+  #tier-svg .tier.sel rect { stroke: var(--orange); stroke-width: 3.5; }
+  #tier-svg .tier:focus { outline: none; }
+</style>
+</head>
+<body data-page="32">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Three-Tier Architecture on AWS</h1>
+    <p class="lead">Most apps you use every day are split into three layers: the screen you see, the logic behind it, and the database that stores the data. This lesson explains that split and how a classic EC2-based version is built on AWS.</p>
+  </header>
+
+  <h2>What is a "tier"?</h2>
+  <p>A <strong>tier</strong> is a separate layer of an application that has one job and usually runs on its own servers. Follow a shopper on an online store:</p>
+  <ol class="steps">
+    <li>The user opens the site in a browser and sees a web page: the <strong>user interface (UI)</strong>, also called the <strong>front end</strong>. They log in, search, and click a product.</li>
+    <li>The UI does not hold product details. It sends a request to the <strong>back end</strong>, an application written in Java, Python, Go, etc. The back end checks the request and decides what data is needed.</li>
+    <li>The back end asks the <strong>database</strong>, which stores the product name, price, description and images.</li>
+    <li>The database answers the back end, and the back end sends the result to the front end, which shows it to the user.</li>
+  </ol>
+
+  <div class="grid-2">
+    <div class="card"><h3>Tier 1: Presentation</h3><p>The front end / UI. Runs in the browser and on web servers. Shows pages and collects input.</p></div>
+    <div class="card"><h3>Tier 2: Application (logic)</h3><p>The back end. Business rules: login checks, pricing, cart, orders. Sits between the UI and the data.</p></div>
+    <div class="card"><h3>Tier 3: Data</h3><p>The database. Stores users, products, orders. Only the logic tier talks to it.</p></div>
+  </div>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A restaurant. The <strong>dining room</strong> (presentation) is where guests order. The <strong>kitchen</strong> (logic) does the work. The <strong>pantry</strong> (data) holds the ingredients. Guests never walk into the pantry; the kitchen fetches what's needed.</div>
+
+  <h3>One, two or three tiers?</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Type</th><th>Layers</th><th>Example</th></tr>
+    <tr><td>One-tier</td><td>Everything in one place</td><td>A static website: just HTML pages, no back end or database</td></tr>
+    <tr><td>Two-tier</td><td>Front end + back end, <em>no database</em></td><td>A web calculator (the UI sends "2 + 2", the back end returns 4), or the 2048 game deployed in <a href="24-eks.html">Lesson 24: EKS</a></td></tr>
+    <tr><td>Three-tier</td><td>Front end + back end + database</td><td>Online shops, social media, banking apps: almost every real app</td></tr>
+  </table></div>
+
+  <h2>Why split an app into tiers?</h2>
+  <ul>
+    <li><strong>Security:</strong> the database is never reachable from the internet. Each tier only accepts traffic from the tier in front of it.</li>
+    <li><strong>Independent scaling:</strong> if the web tier is busy but the app tier isn't, add web servers only.</li>
+    <li><strong>Availability:</strong> each tier runs in at least two Availability Zones, so one data-center failure doesn't take the app down.</li>
+    <li><strong>Separate teams and changes:</strong> front-end developers can ship a UI change without touching the database.</li>
+  </ul>
+
+  <h2>Building it on AWS (EC2 version)</h2>
+  <p>Here is the classic layout, from the outside in.</p>
+  <ol class="steps">
+    <li><strong>A VPC for the project.</strong> One AWS account may host many projects, so give this app its own isolated network, e.g. <code>172.16.0.0/16</code>. (<a href="06-vpc.html">VPCs and CIDR</a>)</li>
+    <li><strong>Subnets per tier, in two AZs.</strong> A <em>public</em> subnet for the internet-facing load balancer, and <em>private</em> subnets for the web tier, the app tier and the database. Spreading across two Availability Zones (e.g. <code>us-east-1a</code> and <code>us-east-1b</code>) keeps the app alive if one zone fails.</li>
+    <li><strong>Web tier:</strong> EC2 instances in an <strong>Auto Scaling Group</strong>, which keeps the right number of servers running, adds more under load, removes them when quiet, and spreads them across AZs. (<a href="09-vpc-production-project.html">Auto Scaling Groups</a>)</li>
+    <li><strong>App tier:</strong> a second Auto Scaling Group for the back-end servers, with an <strong>internal</strong> load balancer in front of it that only the web tier can reach.</li>
+    <li><strong>Data tier:</strong> <strong>Amazon RDS</strong>, a managed database service (MySQL, PostgreSQL…). Run it as <em>Multi-AZ</em>: a primary database plus a standby copy in another AZ that takes over automatically if the primary fails.</li>
+    <li><strong>The front door:</strong> users reach the app through <a href="08-route53.html">Route 53</a> (DNS), optionally <a href="21-cloudfront.html">CloudFront</a> (a CDN that caches content near users), and then a public <a href="28-load-balancers.html">Application Load Balancer</a>.</li>
+  </ol>
+
+  <div class="demo" id="demo-tiers">
+    <div class="demo-head">Try it: explore the tiers</div>
+    <div class="demo-body">
+      <p>Tap any box in the diagram to see what it does and which AWS services it uses.</p>
+      <svg id="tier-svg" viewBox="0 0 700 430" role="img" aria-label="Three-tier architecture on AWS: Route 53 and CloudFront in front of a VPC containing a public load balancer, web tier, internal load balancer, app tier and RDS database across two availability zones">
+        <defs><marker id="arr32" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+        <g class="tier" data-t="edge" tabindex="0" role="button" aria-label="Users, Route 53 and CloudFront">
+          <rect class="s-box2" x="160" y="8" width="380" height="44" rx="8"/>
+          <text class="s-text-b" x="350" y="36" text-anchor="middle">Users → Route 53 → CloudFront</text>
+        </g>
+        <path class="s-line" d="M350 52 V78" marker-end="url(#arr32)"/>
+        <rect class="s-dash" x="8" y="66" width="684" height="356" rx="12"/>
+        <text class="s-text-s" x="20" y="84">VPC 172.16.0.0/16</text>
+        <g class="tier" data-t="alb" tabindex="0" role="button" aria-label="Public load balancer">
+          <rect class="s-orange-soft" x="230" y="90" width="240" height="40" rx="8"/>
+          <text class="s-text-b" x="350" y="115" text-anchor="middle">Public ALB (public subnets)</text>
+        </g>
+        <path class="s-line" d="M300 130 V156" marker-end="url(#arr32)"/>
+        <path class="s-line" d="M400 130 V156" marker-end="url(#arr32)"/>
+        <g class="tier" data-t="web" tabindex="0" role="button" aria-label="Web tier">
+          <rect class="s-blue" x="40" y="158" width="620" height="58" rx="8"/>
+          <text class="s-text-b" x="56" y="182">Web tier</text>
+          <text class="s-text-s" x="56" y="202">private subnets · ASG</text>
+          <rect class="s-box" x="300" y="168" width="140" height="38" rx="6"/>
+          <text class="s-text" x="370" y="192" text-anchor="middle">EC2 · AZ a</text>
+          <rect class="s-box" x="500" y="168" width="140" height="38" rx="6"/>
+          <text class="s-text" x="570" y="192" text-anchor="middle">EC2 · AZ b</text>
+        </g>
+        <path class="s-line" d="M350 216 V236" marker-end="url(#arr32)"/>
+        <g class="tier" data-t="ialb" tabindex="0" role="button" aria-label="Internal load balancer">
+          <rect class="s-orange-soft" x="230" y="238" width="240" height="34" rx="8"/>
+          <text class="s-text-b" x="350" y="260" text-anchor="middle">Internal ALB</text>
+        </g>
+        <path class="s-line" d="M350 272 V290" marker-end="url(#arr32)"/>
+        <g class="tier" data-t="app" tabindex="0" role="button" aria-label="App tier">
+          <rect class="s-green" x="40" y="292" width="620" height="58" rx="8"/>
+          <text class="s-text-b" x="56" y="316">App tier</text>
+          <text class="s-text-s" x="56" y="336">private subnets · ASG</text>
+          <rect class="s-box" x="300" y="302" width="140" height="38" rx="6"/>
+          <text class="s-text" x="370" y="326" text-anchor="middle">EC2 · AZ a</text>
+          <rect class="s-box" x="500" y="302" width="140" height="38" rx="6"/>
+          <text class="s-text" x="570" y="326" text-anchor="middle">EC2 · AZ b</text>
+        </g>
+        <path class="s-line" d="M350 350 V366" marker-end="url(#arr32)"/>
+        <g class="tier" data-t="db" tabindex="0" role="button" aria-label="Data tier">
+          <rect class="s-purple" x="40" y="368" width="620" height="46" rx="8"/>
+          <text class="s-text-b" x="56" y="396">Data tier</text>
+          <text class="s-text" x="370" y="396" text-anchor="middle">RDS primary · AZ a</text>
+          <text class="s-text" x="570" y="396" text-anchor="middle">standby · AZ b</text>
+        </g>
+      </svg>
+      <div class="output" id="tier-out">Tap a tier above.</div>
+
+      <h3 style="margin-top:18px">Who may talk to whom?</h3>
+      <p>Each tier only accepts traffic from the layer directly in front of it. Pick a source and a destination.</p>
+      <div class="row">
+        <label>From <select id="tk-from"></select></label>
+        <label>To <select id="tk-to"></select></label>
+        <button class="btn primary" id="tk-go">Check</button>
+      </div>
+      <div class="output" id="tk-out">Result appears here.</div>
+    </div>
+  </div>
+
+  <h3>How a request flows</h3>
+  <p>User → Route 53 resolves the domain → CloudFront (cached content served from the edge) → public ALB → one web server → internal ALB → one app server → RDS primary. The response travels back the same way.</p>
+
+  <h3>Locking it down with security groups</h3>
+  <p>The usual trick is <strong>security-group chaining</strong>: instead of allowing IP ranges, each tier's security group allows traffic only <em>from the security group of the tier in front of it</em>.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Security group</th><th>Allows inbound from</th></tr>
+    <tr><td>Public ALB</td><td>Internet (0.0.0.0/0) on 80/443</td></tr>
+    <tr><td>Web servers</td><td>Public ALB's security group only</td></tr>
+    <tr><td>Internal ALB</td><td>Web servers' security group only</td></tr>
+    <tr><td>App servers</td><td>Internal ALB's security group only</td></tr>
+    <tr><td>RDS</td><td>App servers' security group only, on the DB port (e.g. 3306)</td></tr>
+  </table></div>
+  <div class="xref-box"><div>How security groups work (inbound rules, stateful replies) is covered in <a href="07-security-groups-nacl.html">Lesson 7: Security Groups &amp; NACLs</a>. Private servers still reach the internet for updates through a <a href="06-vpc.html">NAT gateway</a>.</div></div>
+
+  <h3>Going further: disaster recovery</h3>
+  <p>Larger setups copy the whole stack into a <strong>second region</strong>. If an entire region has an outage, Route 53 can send users to the backup region. Multi-AZ protects against a data-center failure; multi-region protects against a regional one.</p>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Build a one-tier app (a static site) and a two-tier app before this one. A full three-tier build has many parts: VPC, subnets, two ALBs, two ASGs, RDS, Route 53 and CloudFront. It's much less scary when you've already built the smaller pieces.</div>
+
+  <h2>When to talk about this in an interview</h2>
+  <p>This EC2-based design is a classic, but many companies now run apps on <strong>containers</strong> (Kubernetes / EKS) or <strong>serverless</strong> instead of fleets of EC2 instances. Match your story to the job:</p>
+  <div class="grid-2">
+    <div class="card"><h3>JD mentions EC2, ASG, VMs</h3><p>Describe this architecture: the VPC, subnets per tier, ASGs in two AZs, internal and public ALBs, Multi-AZ RDS.</p></div>
+    <div class="card"><h3>JD mentions containers / Kubernetes</h3><p>Describe the three tiers running as microservices on EKS instead. See <a href="33-eks-ecommerce-project.html">Lesson 33</a>.</p></div>
+  </div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Don't mix the two stories. Saying "we ran everything on Kubernetes" and then describing fleets of EC2 web servers in Auto Scaling Groups makes it sound like you haven't worked on either for real.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">A web calculator has a front end and a back end that does the math, but no database. What is it?</div>
+    <div class="opts"><button>One-tier</button><button>Two-tier</button><button>Three-tier</button></div>
+    <div class="explain">Front end + back end without a data layer is a two-tier application.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Which tier should be allowed to connect to the RDS database?</div>
+    <div class="opts"><button>The internet, through the public ALB</button><button>The web (presentation) tier</button><button>Only the app (logic) tier</button></div>
+    <div class="explain">The data tier's security group allows only the app tier's security group. The front end never talks to the database directly.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">What does running RDS as Multi-AZ give you?</div>
+    <div class="opts"><button>A standby copy in another AZ that takes over if the primary fails</button><button>A faster database for read-heavy queries</button><button>A public endpoint so the web tier can skip the app tier</button></div>
+    <div class="explain">Multi-AZ keeps a synchronized standby in a second Availability Zone for automatic failover. It's about availability, not speed or public access.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Three tiers = presentation (UI) + application (logic) + data (database). No database means two-tier.</li>
+      <li>On AWS: a dedicated VPC, a public ALB in public subnets, web and app tiers in private subnets with Auto Scaling Groups, and RDS in its own subnets.</li>
+      <li>Spread every tier across at least two AZs; use Multi-AZ RDS. For disaster recovery, copy the stack to a second region.</li>
+      <li>Each tier only accepts traffic from the tier in front of it (security-group chaining). The database is never internet-facing.</li>
+      <li>In interviews, use this EC2 design for VM-focused roles and an EKS/container design for Kubernetes roles.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var INFO = {
+    edge: ["Front door: Route 53 + CloudFront", "Route 53 turns your domain name into the load balancer's address. CloudFront (optional) is a CDN that caches images, CSS and JS at edge locations near users and forwards everything else to the ALB."],
+    alb: ["Public Application Load Balancer", "The only part inside the VPC that is reachable from the internet. It lives in public subnets in two AZs and spreads requests across healthy web servers. AWS: Elastic Load Balancing (ALB), ACM certificate for HTTPS."],
+    web: ["Tier 1: Presentation (web tier)", "Serves the user interface: HTML, CSS, JS, often via Nginx/Apache. EC2 instances in an Auto Scaling Group across two AZs, in private subnets with no public IPs. Accepts traffic only from the public ALB."],
+    ialb: ["Internal load balancer", "An ALB with the 'internal' scheme: it has no public address. The web tier sends back-end requests here, and it spreads them across app servers."],
+    app: ["Tier 2: Application (logic tier)", "Runs the back-end code (Java, Python, Go…): login checks, cart, pricing, orders. EC2 in its own Auto Scaling Group, private subnets. Accepts traffic only from the internal ALB, and is the only tier that talks to the database."],
+    db: ["Tier 3: Data", "Amazon RDS (e.g. MySQL) in private DB subnets. Multi-AZ: a primary in one AZ and an automatic-failover standby in another. Accepts connections only from the app tier on the DB port. Also enable automated backups."]
+  };
+  var svg = document.getElementById("tier-svg"), out = document.getElementById("tier-out");
+  var groups = svg.querySelectorAll(".tier");
+  function pick(g) {
+    Array.prototype.forEach.call(groups, function (x) { x.classList.remove("sel"); });
+    g.classList.add("sel");
+    var i = INFO[g.getAttribute("data-t")];
+    out.innerHTML = "<strong>" + i[0] + "</strong><br>" + i[1];
+  }
+  Array.prototype.forEach.call(groups, function (g) {
+    g.addEventListener("click", function () { pick(g); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(g); } });
+  });
+
+  var NODES = [["inet", "Internet user"], ["alb", "Public ALB"], ["web", "Web tier"], ["ialb", "Internal ALB"], ["app", "App tier"], ["db", "RDS database"]];
+  var ALLOWED = { "inet>alb": "The public ALB's security group allows HTTP/HTTPS from anywhere. This is the front door.",
+    "alb>web": "The web tier's security group allows traffic from the public ALB's security group.",
+    "web>ialb": "The internal ALB's security group allows traffic from the web tier's security group.",
+    "ialb>app": "The app tier's security group allows traffic from the internal ALB's security group.",
+    "app>db": "The RDS security group allows the DB port (e.g. 3306) from the app tier's security group only." };
+  var from = document.getElementById("tk-from"), to = document.getElementById("tk-to"), tk = document.getElementById("tk-out");
+  NODES.forEach(function (n, i) {
+    from.add(new Option(n[1], n[0]));
+    if (i > 0) to.add(new Option(n[1], n[0]));
+  });
+  to.value = "db";
+  function idx(id) { for (var i = 0; i < NODES.length; i++) if (NODES[i][0] === id) return i; return -1; }
+  document.getElementById("tk-go").addEventListener("click", function () {
+    var a = from.value, b = to.value, key = a + ">" + b;
+    if (a === b) { tk.className = "output"; tk.textContent = "Pick two different components."; return; }
+    if (ALLOWED[key]) { tk.className = "output ok"; tk.innerHTML = "<strong>Allowed.</strong> " + ALLOWED[key]; return; }
+    var ia = idx(a), ib = idx(b), why;
+    if (ib < ia) why = "Requests only flow inward. Replies to an allowed request come back automatically (security groups are stateful), but " + NODES[ib][1] + " doesn't accept new connections from " + NODES[ia][1] + ".";
+    else if (a === "inet") why = NODES[ib][1] + " is in a private subnet with no public IP, and its security group doesn't allow the internet. Users must go through the public ALB.";
+    else why = "This skips a tier. " + NODES[ib][1] + " only accepts traffic from " + NODES[ib - 1][1] + ", so " + NODES[ia][1] + " is blocked by the security group.";
+    tk.className = "output bad"; tk.innerHTML = "<strong>Blocked.</strong> " + why;
+  });
+})();
+</script>
+</body>
+</html>

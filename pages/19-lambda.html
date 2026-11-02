@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lambda: Serverless Functions · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .lam-log { font: 13px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow-y: auto; }
+  .lam-log .ev { color: var(--purple); font-weight: 700; }
+  .lam-log .cold { color: var(--orange-strong); font-weight: 700; }
+  .lam-log .warm { color: var(--green); font-weight: 700; }
+  .lam-log .dim { color: var(--text-2); }
+  .lam-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .lam-stats span { font-size: 14px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); }
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .calc label { display: block; font-size: 14px; color: var(--text-2); }
+  .calc input, .calc select { width: 100%; }
+  .cost-big { font-size: 22px; font-weight: 800; }
+</style>
+</head>
+<body data-page="19">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Lambda: Serverless Functions</h1>
+    <p class="lead">AWS Lambda runs your code only when something happens: a schedule, a file upload, an API call. You don't create or manage any servers, and you pay only for the milliseconds your code runs. That makes it a favourite DevOps tool for automation jobs.</p>
+  </header>
+
+  <h2>What problem Lambda solves</h2>
+  <p>When you think of S3 you think <i>storage</i>. Lambda belongs to two ideas at once:</p>
+  <ul>
+    <li><b>Compute</b>: like <a href="04-ec2.html">EC2</a>, it gives you a place to run code (Python, Node.js, Java…).</li>
+    <li><b>Serverless</b>: unlike EC2, you never pick, start, patch or stop a server.</li>
+  </ul>
+  <p>With EC2 you tell AWS the image, instance type (CPU and memory), network and security settings, and you get a virtual server that runs until <i>you</i> stop it. With Lambda you hand AWS just your code. When an event arrives, AWS creates the compute it needs, runs the code, scales out if many events come at once, and then removes it all again.</p>
+
+  <h3>What "serverless" means</h3>
+  <p><b>Serverless</b> doesn't mean there are no servers. It means <b>the servers aren't your problem</b>. AWS provisions, scales, patches and tears them down, and you don't even see an IP address or subnet. You only care about your code and what triggers it.</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>The checkout in a food-delivery app. A customer taps <i>Pay</i>, the payment code runs for a moment, the order is placed, and the customer is gone. On a serverless design, compute for that checkout exists only while the payment is being processed and disappears once it's done. On a server design, a checkout server sits running (and costing money) all night, whether anyone orders or not.</div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 150" role="img" aria-label="Over 24 hours, an EC2 instance runs and is billed all day, while a Lambda function runs for about 5 minutes at 10:00 and is billed only for that time.">
+      <text class="s-text-s" x="110" y="20">00:00</text>
+      <text class="s-text-s" x="385" y="20" text-anchor="middle">12:00</text>
+      <text class="s-text-s" x="660" y="20" text-anchor="end">24:00</text>
+      <path class="s-line" d="M110 28 H660" style="stroke-width:1"/>
+      <text class="s-text-b" x="10" y="62">EC2</text>
+      <rect class="s-orange-soft" x="110" y="42" width="550" height="30" rx="5"/>
+      <text class="s-text" x="385" y="62" text-anchor="middle">running, and billed, all day</text>
+      <text class="s-text-b" x="10" y="112">Lambda</text>
+      <rect class="s-box2" x="110" y="92" width="550" height="30" rx="5"/>
+      <rect class="s-orange" x="337" y="92" width="6" height="30"/>
+      <text class="s-text" x="352" y="112">runs ~5 min at 10:00, billed only for that</text>
+      <text class="s-text-s" x="110" y="144">A daily automation script: the same work, very different bills.</text>
+    </svg>
+    <figcaption>Why DevOps teams run scheduled scripts on Lambda instead of a server that sits idle all day.</figcaption>
+  </figure>
+
+  <h3>Who decides: server or serverless?</h3>
+  <p>For the company's <i>applications</i>, the architects and developers decide. A food app can be built either way, and it depends on how the code is written. As a DevOps engineer you build the infrastructure they choose. Where <i>you</i> choose Lambda is in your own automation work.</p>
+
+  <h2>Event-driven: triggers</h2>
+  <p>Lambda functions are <b>event-driven</b>: they run in response to an <b>event</b>. The thing that delivers the event is the function's <b>trigger</b>. You can also run a function by hand with a test event, but a function with no trigger loses most of the benefit.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 240" role="img" aria-label="Events from a schedule, S3, an AWS API event, or an HTTPS request trigger a Lambda function, which can call AWS APIs, publish to SNS and writes logs to CloudWatch.">
+      <defs><marker id="arr19" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-purple" x="10" y="16" width="210" height="42" rx="7"/>
+      <text class="s-text" x="115" y="42" text-anchor="middle">Schedule (daily 10:00)</text>
+      <rect class="s-purple" x="10" y="70" width="210" height="42" rx="7"/>
+      <text class="s-text" x="115" y="96" text-anchor="middle">S3: object uploaded</text>
+      <rect class="s-purple" x="10" y="124" width="210" height="42" rx="7"/>
+      <text class="s-text" x="115" y="150" text-anchor="middle">Event: EBS volume created</text>
+      <rect class="s-purple" x="10" y="178" width="210" height="42" rx="7"/>
+      <text class="s-text" x="115" y="204" text-anchor="middle">HTTPS: function URL</text>
+      <path class="s-line" d="M220 37 C 245 37, 245 100, 267 108" marker-end="url(#arr19)"/>
+      <path class="s-line" d="M220 91 C 240 91, 250 112, 267 114" marker-end="url(#arr19)"/>
+      <path class="s-line" d="M220 145 C 240 145, 250 128, 267 126" marker-end="url(#arr19)"/>
+      <path class="s-line" d="M220 199 C 245 199, 245 140, 267 132" marker-end="url(#arr19)"/>
+      <rect class="s-ink" x="270" y="70" width="170" height="100" rx="10"/>
+      <text class="s-text-w" x="355" y="108" text-anchor="middle">Lambda function</text>
+      <text class="s-text-w" x="355" y="130" text-anchor="middle" style="font:12px var(--mono)">lambda_handler(</text>
+      <text class="s-text-w" x="355" y="148" text-anchor="middle" style="font:12px var(--mono)">event, context)</text>
+      <path class="s-line-o" d="M440 100 C 460 100, 460 58, 487 58" marker-end="url(#arr19)"/>
+      <path class="s-line-o" d="M440 120 H487" marker-end="url(#arr19)"/>
+      <path class="s-line" d="M440 140 C 460 140, 460 182, 487 182" marker-end="url(#arr19)"/>
+      <rect class="s-box" x="490" y="37" width="180" height="42" rx="7"/>
+      <text class="s-text" x="580" y="63" text-anchor="middle">AWS APIs (boto3)</text>
+      <rect class="s-box" x="490" y="99" width="180" height="42" rx="7"/>
+      <text class="s-text" x="580" y="125" text-anchor="middle">SNS notification</text>
+      <rect class="s-box" x="490" y="161" width="180" height="42" rx="7"/>
+      <text class="s-text" x="580" y="187" text-anchor="middle">CloudWatch Logs</text>
+    </svg>
+    <figcaption>Common triggers on the left; what a DevOps function typically does on the right.</figcaption>
+  </figure>
+  <ul>
+    <li><b>Schedule</b>: an EventBridge rule (formerly "CloudWatch Events") like "every day at 10:00" works like a cron job in the cloud.</li>
+    <li><b>Resource events</b>: "an EBS volume was created", "an EC2 instance changed state", delivered through EventBridge.</li>
+    <li><b>S3 events</b>: "a new object was uploaded to this bucket".</li>
+    <li><b>HTTP requests</b>: through a function URL or API Gateway.</li>
+  </ul>
+
+  <h2>How DevOps engineers use Lambda</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Cost optimization</h3><p>Find <b>stale resources</b> (an EBS volume nobody has used for 30 days, old snapshots, an idle instance holding an Elastic IP) and report or delete them. This is built step by step in <a href="20-cost-optimization.html">Lesson 20</a>.</p></div>
+    <div class="card"><h3>Security &amp; compliance</h3><p>Enforce company rules automatically. Examples: "all EBS volumes must be gp3, not gp2" (gp3 is cheaper and faster), or "no S3 bucket may be public". The function checks daily and sends an SNS alert, or fixes the problem itself.</p></div>
+    <div class="card"><h3>Routine checks</h3><p>Daily audits, such as listing IAM users or roles that were given extra permissions, and sending a summary to the team.</p></div>
+  </div>
+  <p>Why Lambda rather than EC2 for these? Say a cleanup script runs for 5 minutes every morning at 10:00. On EC2 you'd have to start a server, run the script and stop the server every day, or leave it running and pay for 23 hours 55 minutes of nothing. If you forget to stop it, you pay even more. With Lambda you set "every day at 10:00" as the trigger and AWS handles the rest.</p>
+
+  <div class="demo" id="demo-lam">
+    <div class="demo-head">Try it: fire events at a Lambda function</div>
+    <div class="demo-body">
+      <p>Click an event to trigger the function. The first call (or a call after a quiet spell) is a <b>cold start</b>: AWS has to set up a fresh environment. Calls that follow soon after reuse it (<b>warm start</b>). Billing counts only the run time.</p>
+      <div class="row">
+        <button class="btn" data-ev="schedule">Schedule: 10:00 daily</button>
+        <button class="btn" data-ev="s3">S3 upload</button>
+        <button class="btn" data-ev="ebs">EBS volume created</button>
+        <button class="btn" data-ev="http">HTTPS request</button>
+      </div>
+      <div class="output lam-log" id="lam-out">Waiting for an event… (no environment running, nothing being billed)</div>
+      <div class="lam-stats"><span>Invocations: <b id="lam-n">0</b></span><span>Billed time: <b id="lam-ms">0</b> ms</span><span>Compute: <b id="lam-gbs">0</b> GB-s</span></div>
+    </div>
+  </div>
+
+  <h2>Creating a function in the console</h2>
+  <ol class="steps">
+    <li>Open <b>Lambda → Create function</b>. Choose one of:
+      <ul>
+        <li><b>Author from scratch</b>: you write the code (what DevOps engineers usually do).</li>
+        <li><b>Use a blueprint</b>: AWS samples, e.g. "process an object uploaded to S3".</li>
+        <li><b>Container image</b>: package your code as a Docker image stored in <a href="22-ecr.html">ECR</a>.</li>
+      </ul>
+    </li>
+    <li><b>Runtime</b>: the language. AWS provides managed runtimes for Python, Node.js, Java, .NET and Ruby. Other languages (e.g. Go, or even shell) run on an OS-only "custom runtime", which is more work. Python is the most popular choice for DevOps scripts.</li>
+    <li><b>Execution role</b>: by default Lambda creates an IAM role for the function that can only write logs. If your function needs to read EC2 or publish to SNS, add permissions to that role (or choose an existing role). As always, services get permissions through roles. See <a href="03-iam.html">IAM</a>.</li>
+    <li><b>Advanced settings → Enable function URL</b> (optional) gives the function its own HTTPS address. Auth type <code>NONE</code> means anyone can call it, which is fine for a hello-world demo. <code>AWS_IAM</code> restricts it to authorised callers. Without a URL, AWS services and triggers can still invoke the function. DevOps automation rarely needs a URL.</li>
+  </ol>
+
+  <h3>The handler</h3>
+  <p>The new function comes with sample code:</p>
+<pre><code>import json
+
+def lambda_handler(event, context):
+    # event:   the data from the trigger (the S3 object, the schedule, the HTTP request...)
+    # context: info about this run (request id, time remaining...)
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }</code></pre>
+  <p>The <b>handler</b> is the function Lambda calls first, like <code>main()</code> in Java or C. The handler setting <code>lambda_function.lambda_handler</code> means "file <code>lambda_function.py</code>, function <code>lambda_handler</code>". You can write as many other functions as you like, but they run only if the handler calls them. You can rename the handler, but then you must also update it under <i>Runtime settings</i>.</p>
+  <p>You can edit code in the browser, add files and folders, or write it in VS Code on your laptop and upload a <b>.zip</b>. Click <b>Deploy</b> to save, then <b>Test</b> with a test event to run it by hand. Open the function URL and you'll see <code>"Hello from Lambda!"</code>.</p>
+
+  <h3>Useful configuration</h3>
+  <div class="table-wrap"><table>
+    <tr><th>Setting</th><th>What it's for</th></tr>
+    <tr><td>Environment variables</td><td>Change behaviour (thresholds, region, dry-run flags) without editing code.</td></tr>
+    <tr><td>Timeout</td><td>Max run time per call. <b>Default 3 seconds</b>, max 15 minutes. Raise it for longer scripts, but keep it tight because you pay for run time.</td></tr>
+    <tr><td>Memory</td><td>128 MB up to 10 GB. CPU power grows with memory.</td></tr>
+    <tr><td>Permissions</td><td>The execution role (what the function may do) and resource policy (who may invoke it).</td></tr>
+    <tr><td>Triggers / Destinations</td><td>What starts the function, and where results go (e.g. SNS) after an asynchronous run.</td></tr>
+    <tr><td>VPC</td><td>Attach the function to your VPC to reach private resources such as a database.</td></tr>
+  </table></div>
+
+  <h2>Pricing model</h2>
+  <p>You pay for two things, and nothing while the function is idle:</p>
+  <ul>
+    <li><b>Requests</b>: about <b>$0.20 per million</b> invocations.</li>
+    <li><b>Duration × memory</b>, measured in <b>GB-seconds</b>: run time (billed per millisecond) × memory size. About $0.0000167 per GB-second on x86.</li>
+  </ul>
+  <p>The free tier includes <b>1 million requests and 400,000 GB-seconds per month</b>, so most DevOps automation costs nothing. (Prices are approximate us-east-1 list prices; check the AWS pricing page for current numbers.)</p>
+
+  <div class="demo" id="demo-cost">
+    <div class="demo-head">Try it: Lambda cost estimator</div>
+    <div class="demo-body">
+      <div class="row" style="margin-bottom:8px"><button class="btn" id="pr-daily">Preset: daily cleanup job</button><button class="btn" id="pr-api">Preset: busy API</button></div>
+      <div class="calc">
+        <div><label for="c-inv">Invocations / month</label><input type="number" id="c-inv" min="0" value="30"></div>
+        <div><label for="c-dur">Avg duration (ms)</label><input type="number" id="c-dur" min="1" value="300000"></div>
+        <div><label for="c-mem">Memory</label><select id="c-mem"><option>128</option><option selected>256</option><option>512</option><option>1024</option><option>2048</option></select></div>
+      </div>
+      <label style="display:block;margin-top:8px"><input type="checkbox" id="c-free" checked style="accent-color:var(--orange)"> Apply monthly free tier</label>
+      <div class="output" id="c-out"></div>
+    </div>
+  </div>
+
+  <h2>Lambda vs EC2</h2>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>EC2</th><th>Lambda</th></tr>
+    <tr><td>You choose</td><td>AMI, instance type, network, storage</td><td>Runtime, memory, timeout</td></tr>
+    <tr><td>Runs</td><td>Until you stop it</td><td>Only when triggered, up to 15 min per call</td></tr>
+    <tr><td>Scaling</td><td>You configure (e.g. Auto Scaling groups)</td><td>Automatic, per event</td></tr>
+    <tr><td>Visibility</td><td>Full control: IP, subnet, OS</td><td>Hidden; AWS manages it</td></tr>
+    <tr><td>Billing</td><td>Per second while running, busy or idle</td><td>Per request + per ms of run time</td></tr>
+    <tr><td>Best for</td><td>Long-running apps, full OS control, steady load</td><td>Short, event-driven tasks; spiky or rare workloads</td></tr>
+  </table></div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"When would you use Lambda instead of EC2?" Short, event-driven or scheduled tasks such as cost cleanups, compliance checks and reacting to S3 uploads, where paying for an idle server is wasteful. Mention the limits: max 15 minutes per run, no OS control, and cold starts.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">A Python script must run for 4 minutes every night. What's the most cost-effective way to run it on AWS?</div>
+    <div class="opts"><button>A t3.micro EC2 instance running 24/7 with cron</button><button>A Lambda function triggered by an EventBridge schedule</button><button>Run it manually from your laptop</button></div>
+    <div class="explain">Lambda with a schedule trigger runs only those 4 minutes and bills only for them. EC2 would bill all day.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Your function times out after 3 seconds even though the code is correct. Why?</div>
+    <div class="opts"><button>3 seconds is the default timeout; raise it in the configuration</button><button>Lambda only allows 3-second functions</button><button>The handler name is wrong</button></div>
+    <div class="explain">The default timeout is 3 seconds. You can raise it up to 15 minutes.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">What does the handler setting <code>lambda_function.lambda_handler</code> mean?</div>
+    <div class="opts"><button>The function's IAM role name</button><button>The trigger that calls the function</button><button>Call the <code>lambda_handler</code> function in <code>lambda_function.py</code></button></div>
+    <div class="explain">It's <i>file.function</i>, the entry point Lambda calls with <code>(event, context)</code>.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Lambda is <b>serverless compute</b>: you give AWS code, and it creates, scales and removes the servers.</li>
+      <li>Functions are <b>event-driven</b>: schedules, S3 uploads, resource events or HTTP requests trigger them.</li>
+      <li>The <b>handler</b> (<code>lambda_handler(event, context)</code>) is the entry point. Permissions come from the function's <b>execution role</b>.</li>
+      <li>Default timeout is 3 s (max 15 min). You pay per request + GB-seconds, with a generous free tier and nothing while idle.</li>
+      <li>DevOps engineers use Lambda for cost optimization, compliance checks and routine automation.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  /* ---- event simulator ---- */
+  var out = document.getElementById("lam-out");
+  var nEl = document.getElementById("lam-n"), msEl = document.getElementById("lam-ms"), gbsEl = document.getElementById("lam-gbs");
+  var lastRun = 0, count = 0, totalMs = 0, totalGbs = 0, first = true, busy = false;
+  var MEM = 256, WARM_WINDOW = 20000;
+  var EVENTS = {
+    schedule: { src: "EventBridge rule cost-check-daily fired (cron 0 10 * * ? *)", work: ["Listing EBS snapshots with boto3...", "Found 42 snapshots, 3 stale -> deleted"], base: 900 },
+    s3: { src: "S3: ObjectCreated reports/q3.csv in bucket my-uploads", work: ["Reading object metadata...", "File is 2.1 MB, sent summary to SNS topic"], base: 250 },
+    ebs: { src: "EventBridge: CreateVolume vol-0a1b2c (type gp2)", work: ["Checking volume type against policy...", "gp2 not allowed, alert sent to SNS: please use gp3"], base: 180 },
+    http: { src: "HTTPS GET via function URL", work: ["Returning response...", "200 OK  \"Hello from Lambda!\""], base: 40 }
+  };
+  function line(text, cls) {
+    if (first) { out.innerHTML = ""; first = false; }
+    var d = document.createElement("div");
+    if (cls) d.className = cls;
+    d.textContent = text;
+    out.appendChild(d);
+    out.scrollTop = out.scrollHeight;
+  }
+  function rid() { return Math.random().toString(16).slice(2, 10); }
+  function fire(key) {
+    if (busy) return;
+    busy = true;
+    var ev = EVENTS[key], now = Date.now();
+    var cold = !lastRun || now - lastRun > WARM_WINDOW;
+    var dur = Math.round(ev.base * (0.8 + Math.random() * 0.4));
+    var steps = [];
+    steps.push(["EVENT  " + ev.src, "ev"]);
+    if (cold) steps.push(["COLD START: AWS creates a new environment (python3.12, " + MEM + " MB, ~300 ms init)", "cold"]);
+    else steps.push(["WARM START: reusing the environment from the last call", "warm"]);
+    steps.push(["START RequestId: " + rid(), ""]);
+    ev.work.forEach(function (w) { steps.push([w, ""]); });
+    steps.push(["END   Duration: " + dur + " ms  Billed: " + dur + " ms  Memory: " + MEM + " MB", "dim"]);
+    steps.push(["Idle: environment kept warm for a while, then AWS removes it. Idle time costs nothing.", "dim"]);
+    var i = 0;
+    (function next() {
+      if (i < steps.length) { line(steps[i][0], steps[i][1]); i++; setTimeout(next, 220); return; }
+      lastRun = Date.now();
+      count++; totalMs += dur; totalGbs += dur / 1000 * MEM / 1024;
+      nEl.textContent = count; msEl.textContent = totalMs; gbsEl.textContent = totalGbs.toFixed(3);
+      line(" ", "");
+      busy = false;
+    })();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#demo-lam [data-ev]"), function (b) {
+    b.addEventListener("click", function () { fire(b.getAttribute("data-ev")); });
+  });
+
+  /* ---- cost estimator ---- */
+  var REQ_PRICE = 0.20 / 1e6, GBS_PRICE = 0.0000166667, FREE_REQ = 1e6, FREE_GBS = 400000, EC2_MONTH = 0.0104 * 730;
+  var inv = document.getElementById("c-inv"), dur = document.getElementById("c-dur"), mem = document.getElementById("c-mem"), free = document.getElementById("c-free"), cout = document.getElementById("c-out");
+  function money(x) { return x < 0.01 && x > 0 ? "<$0.01" : "$" + x.toFixed(2); }
+  function calc() {
+    var n = Math.max(0, parseFloat(inv.value) || 0), d = Math.max(0, parseFloat(dur.value) || 0), m = parseFloat(mem.value);
+    if (d > 900000) d = 900000;
+    var gbs = n * (d / 1000) * (m / 1024);
+    var billReq = free.checked ? Math.max(0, n - FREE_REQ) : n;
+    var billGbs = free.checked ? Math.max(0, gbs - FREE_GBS) : gbs;
+    var total = billReq * REQ_PRICE + billGbs * GBS_PRICE;
+    cout.innerHTML =
+      '<div class="cost-big">' + money(total) + ' / month</div>' +
+      '<div>' + n.toLocaleString() + ' requests · ' + Math.round(gbs).toLocaleString() + ' GB-seconds' + (free.checked ? ' (after free tier: ' + Math.round(billGbs).toLocaleString() + ' GB-s billed)' : '') + '</div>' +
+      '<div class="muted" style="margin-top:6px">Compare: one t3.micro EC2 running all month ≈ ' + money(EC2_MONTH) + ' (approx. on-demand, us-east-1), whether it is busy or idle.' +
+      (parseFloat(dur.value) > 900000 ? ' Note: Lambda caps a single run at 15 minutes (900,000 ms).' : '') + '</div>';
+    cout.className = "output " + (total <= EC2_MONTH ? "ok" : "bad");
+  }
+  [inv, dur, mem, free].forEach(function (e) { e.addEventListener("input", calc); e.addEventListener("change", calc); });
+  document.getElementById("pr-daily").addEventListener("click", function () { inv.value = 30; dur.value = 300000; mem.value = "256"; calc(); });
+  document.getElementById("pr-api").addEventListener("click", function () { inv.value = 5000000; dur.value = 120; mem.value = "512"; calc(); });
+  calc();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shell Scripting: AWS Resource Report · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .cron-fields { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .cron-fields label { display: flex; flex-direction: column; font-size: 12px; color: var(--text-2); gap: 3px; }
+  .cron-fields input { width: 100%; min-width: 0; font-family: var(--mono); text-align: center; padding: 7px 4px; }
+  .cron-line { font: 15px var(--mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 10px; overflow-x: auto; white-space: nowrap; }
+  #cron-out ul { margin: 6px 0 0; padding-left: 20px; }
+</style>
+</head>
+<body data-page="35">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Shell Scripting: AWS Resource Report</h1>
+    <p class="lead">Write a beginner-friendly shell script that lists the active resources in your AWS account for any region and service, run it on a schedule with cron, and pick up the scripting and security habits interviewers look for.</p>
+  </header>
+
+  <h2>Why this project?</h2>
+  <p>Interviewers rarely ask "what's the command to list processes?" anymore. They ask <em>"What do you use shell scripts for in your job?"</em> This project gives you a real answer.</p>
+  <p>Companies care about cost. Forgotten EC2 instances, unattached EBS volumes and old load balancers all cost money. So DevOps engineers often write a script that <strong>reports what's running</strong>, schedule it with <strong>cron</strong> to run every day, and (optionally) email the report to managers. Many teams write these in shell; others use Python with <code>boto3</code>.</p>
+
+  <p>The script works like this:</p>
+<pre><code>./aws_resource_list.sh &lt;region&gt; &lt;service&gt;
+
+./aws_resource_list.sh us-east-1 ec2    # running EC2 instances in us-east-1
+./aws_resource_list.sh us-east-1 s3     # S3 buckets
+./aws_resource_list.sh us-east-1 ebs    # EBS volumes</code></pre>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>AWS has 200+ services, and no company uses all of them. First find out <strong>which services your organisation actually uses</strong> and support only those. Anything else should get a clear "invalid service" message.</div>
+
+  <h2>How the script works</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 250" role="img" aria-label="Script flow: check two arguments, check AWS CLI installed, check AWS CLI configured, then a case statement picks the AWS CLI command for the service; each failed check exits with code 1">
+      <defs><marker id="arr35" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="10" y="40" width="110" height="64" rx="8"/>
+      <text class="s-text-w" x="65" y="68" text-anchor="middle">Run with</text>
+      <text class="s-text-w" x="65" y="88" text-anchor="middle">$1 $2</text>
+      <path class="s-line" d="M120 72 H146" marker-end="url(#arr35)"/>
+      <rect class="s-blue" x="148" y="40" width="120" height="64" rx="8"/>
+      <text class="s-text-b" x="208" y="68" text-anchor="middle">2 args?</text>
+      <text class="s-text-s" x="208" y="88" text-anchor="middle">$# -ne 2</text>
+      <path class="s-line" d="M268 72 H294" marker-end="url(#arr35)"/>
+      <rect class="s-blue" x="296" y="40" width="120" height="64" rx="8"/>
+      <text class="s-text-b" x="356" y="68" text-anchor="middle">CLI installed?</text>
+      <text class="s-text-s" x="356" y="88" text-anchor="middle">command -v aws</text>
+      <path class="s-line" d="M416 72 H442" marker-end="url(#arr35)"/>
+      <rect class="s-blue" x="444" y="40" width="120" height="64" rx="8"/>
+      <text class="s-text-b" x="504" y="68" text-anchor="middle">Configured?</text>
+      <text class="s-text-s" x="504" y="88" text-anchor="middle">~/.aws exists</text>
+      <path class="s-line" d="M564 72 H590" marker-end="url(#arr35)"/>
+      <rect class="s-green" x="592" y="40" width="100" height="64" rx="8"/>
+      <text class="s-text-b" x="642" y="68" text-anchor="middle">case $2</text>
+      <text class="s-text-s" x="642" y="88" text-anchor="middle">run aws ...</text>
+      <path class="s-line" d="M208 104 V168" marker-end="url(#arr35)"/>
+      <path class="s-line" d="M356 104 V168" marker-end="url(#arr35)"/>
+      <path class="s-line" d="M504 104 V168" marker-end="url(#arr35)"/>
+      <path class="s-line" d="M642 104 V168" marker-end="url(#arr35)"/>
+      <text class="s-text-s" x="214" y="140">no</text>
+      <text class="s-text-s" x="362" y="140">no</text>
+      <text class="s-text-s" x="510" y="140">no</text>
+      <text class="s-text-s" x="648" y="140">unknown</text>
+      <rect class="s-red" x="148" y="170" width="544" height="44" rx="8"/>
+      <text class="s-text-b" x="420" y="197" text-anchor="middle">print a helpful message → exit 1</text>
+      <text class="s-text-s" x="10" y="24">Validate first, act last</text>
+    </svg>
+    <figcaption>Every check that fails stops the script early with a clear message and a non-zero exit code.</figcaption>
+  </figure>
+
+  <h2>Shell basics you'll use</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Syntax</th><th>Meaning</th></tr>
+    <tr><td><code>#!/bin/bash</code></td><td>The <strong>shebang</strong>: the first line, telling the system to run the file with Bash.</td></tr>
+    <tr><td><code>$0</code>, <code>$1</code>, <code>$2</code></td><td><strong>Command-line arguments</strong>: <code>$0</code> is the script's own name, <code>$1</code> the first input (region), <code>$2</code> the second (service).</td></tr>
+    <tr><td><code>$#</code></td><td>How many arguments were passed.</td></tr>
+    <tr><td><code>if … then … fi</code></td><td>A condition. Blocks end with the word reversed: <code>if</code> → <code>fi</code>.</td></tr>
+    <tr><td><code>case … in … esac</code></td><td>A switch: pick one branch based on a value. Ends with <code>esac</code> (case reversed).</td></tr>
+    <tr><td><code>exit 1</code></td><td>Stop now with an error code. <code>0</code> means success; anything else means failure.</td></tr>
+  </table></div>
+
+  <h2>The full script</h2>
+<pre><code>#!/bin/bash
+###############################################################################
+# Author:  DevOps Team
+# Version: v0.0.1
+#
+# Lists active AWS resources in a given region for a given service.
+#
+# Supported services: ec2, s3, rds, dynamodb, lambda, ebs, elb, cloudfront,
+#                     cloudwatch, sns, sqs, route53, cloudformation, iam, vpc
+#
+# Usage:   ./aws_resource_list.sh &lt;region&gt; &lt;service&gt;
+# Example: ./aws_resource_list.sh us-east-1 ec2
+###############################################################################
+
+# 1. Check that exactly two arguments were passed
+if [ $# -ne 2 ]; then
+    echo "Usage: $0 &lt;region&gt; &lt;service&gt;"
+    echo "Example: $0 us-east-1 ec2"
+    exit 1
+fi
+
+region=$1
+service=$2
+
+# 2. Check that the AWS CLI is installed
+if ! command -v aws &amp;&gt; /dev/null; then
+    echo "AWS CLI is not installed. Please install it and try again."
+    exit 1
+fi
+
+# 3. Check that the AWS CLI is configured
+if [ ! -d ~/.aws ]; then
+    echo "AWS CLI is not configured. Run 'aws configure' and try again."
+    exit 1
+fi
+
+# 4. Run the right AWS CLI command for the chosen service
+case $service in
+    ec2)
+        aws ec2 describe-instances --region "$region" \
+            --filters "Name=instance-state-name,Values=running" ;;
+    s3)             aws s3api list-buckets ;;
+    rds)            aws rds describe-db-instances --region "$region" ;;
+    dynamodb)       aws dynamodb list-tables --region "$region" ;;
+    lambda)         aws lambda list-functions --region "$region" ;;
+    ebs)            aws ec2 describe-volumes --region "$region" ;;
+    elb)            aws elbv2 describe-load-balancers --region "$region" ;;
+    cloudfront)     aws cloudfront list-distributions ;;
+    cloudwatch)     aws cloudwatch describe-alarms --region "$region" ;;
+    sns)            aws sns list-topics --region "$region" ;;
+    sqs)            aws sqs list-queues --region "$region" ;;
+    route53)        aws route53 list-hosted-zones ;;
+    cloudformation) aws cloudformation describe-stacks --region "$region" ;;
+    iam)            aws iam list-users ;;
+    vpc)            aws ec2 describe-vpcs --region "$region" ;;
+    *)
+        echo "Invalid service: $service"
+        echo "Supported: ec2 s3 rds dynamodb lambda ebs elb cloudfront cloudwatch sns sqs route53 cloudformation iam vpc"
+        exit 1
+        ;;
+esac</code></pre>
+
+  <h3>Walking through it</h3>
+  <ol class="steps">
+    <li><strong>Header comments first.</strong> Before any code: what the script does, the author (or team) so people know who to ask, a version, supported services, and usage with an example. Start at a low version like <code>v0.0.1</code>, bump it on every change, and move to <code>1.0.0</code> once it's stable. In an interview, start by writing this header; it shows good habits.</li>
+    <li><strong>Validate the arguments.</strong> If someone runs <code>./aws_resource_list.sh ec2</code> and forgets the region, print the usage and exit. Using <code>$0</code> in the message means it stays correct even if the file is renamed. Whenever a script takes arguments, validate them first.</li>
+    <li><strong>Check the AWS CLI is installed.</strong> You could call the AWS APIs directly with <code>curl</code>, but then you'd have to handle request signing, headers and JSON yourself. The <a href="12-aws-cli.html">AWS CLI</a> makes those API calls for you. (In Python you'd use <code>boto3</code> instead.) If the CLI is missing on this machine, say so clearly instead of failing with a confusing error.</li>
+    <li><strong>Check it's configured.</strong> <code>aws configure</code> creates the <code>~/.aws</code> folder with your credentials and default region. <code>[ ! -d ~/.aws ]</code> means "if this directory does <em>not</em> exist".</li>
+    <li><strong>Pick the command with <code>case</code>.</strong> The region stays the same and only the command changes per service. A <code>case</code> statement is cleaner than a long <code>if / elif</code> chain: one readable line per service, and a <code>*)</code> catch-all for invalid input.</li>
+  </ol>
+  <div class="callout tip"><span class="callout-title">Tip</span>Checking for <code>~/.aws</code> is a quick heuristic. A stronger check is <code>aws sts get-caller-identity</code>, which actually confirms the credentials work. Also note: S3, IAM, CloudFront and Route 53 are <em>global</em>, so the region doesn't change their results.</div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How do you remember all those CLI commands?" It's fine to say: "I remember the common ones like <code>ec2 describe-instances</code> and <code>s3api list-buckets</code>. For the rest I check the AWS CLI reference." That's what working engineers do.</div>
+
+  <h2>Running it on EC2</h2>
+  <p>If you're on Windows, the easiest place to run Bash is a small Ubuntu EC2 instance (<a href="04-ec2.html">launch one</a>, then <a href="05-connect-to-ec2.html">SSH in</a>).</p>
+<pre><code># Install the AWS CLI v2 on Ubuntu
+sudo apt update
+sudo apt install -y unzip
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+aws --version
+
+# Configure it (use an IAM user's access keys, not root)
+aws configure
+
+# Make the script executable and run it
+chmod +x aws_resource_list.sh
+./aws_resource_list.sh us-east-1 ec2</code></pre>
+  <p>Test the failure paths too: run it with one argument (you should see the usage message), and before installing the CLI (you should see "AWS CLI is not installed"). Checking that your error handling works is part of testing a script.</p>
+
+  <h2>Scheduling it with cron</h2>
+  <p><strong>cron</strong> is the Linux scheduler. It runs commands at set times. Each line in your <em>crontab</em> has five time fields followed by the command:</p>
+<pre><code>┌──────── minute       (0-59)
+│ ┌────── hour         (0-23)
+│ │ ┌──── day of month (1-31)
+│ │ │ ┌── month        (1-12)
+│ │ │ │ ┌ day of week  (0-7, 0 and 7 = Sunday)
+│ │ │ │ │
+0 21 * * * /home/ubuntu/aws_resource_list.sh us-east-1 ec2 &gt;&gt; /home/ubuntu/ec2_report.log 2&gt;&amp;1</code></pre>
+  <p>That line runs the report <strong>every day at 9 PM</strong> and appends the output (and any errors, via <code>2&gt;&amp;1</code>) to a log file. Edit your crontab with <code>crontab -e</code> and list it with <code>crontab -l</code>.</p>
+  <div class="callout warn"><span class="callout-title">Watch out</span>cron runs with a very short <code>PATH</code> (usually just <code>/usr/bin:/bin</code>). The AWS CLI lives in <code>/usr/local/bin</code>, so the script may say "AWS CLI is not installed" under cron even though it works in your terminal. Add <code>PATH=/usr/local/bin:/usr/bin:/bin</code> at the top of the crontab or the script, and always use full paths in cron lines.</div>
+
+  <div class="demo" id="demo-cron">
+    <div class="demo-head">Try it: cron expression explainer</div>
+    <div class="demo-body">
+      <p>Edit the five fields or pick a preset. Supports <code>*</code>, numbers, lists (<code>1,15</code>), ranges (<code>1-5</code>) and steps (<code>*/15</code>).</p>
+      <div class="row" id="cron-presets">
+        <button class="btn" data-c="0 21 * * *">Daily 9 PM</button>
+        <button class="btn" data-c="*/15 * * * *">Every 15 min</button>
+        <button class="btn" data-c="0 9 * * 1-5">Weekdays 9 AM</button>
+        <button class="btn" data-c="0 0 1 * *">Monthly</button>
+        <button class="btn" data-c="30 6 * * 0">Sundays 6:30</button>
+      </div>
+      <div class="cron-fields" style="margin-top:10px">
+        <label>min<input type="text" id="cf-0" value="0" aria-label="minute"></label>
+        <label>hour<input type="text" id="cf-1" value="21" aria-label="hour"></label>
+        <label>day<input type="text" id="cf-2" value="*" aria-label="day of month"></label>
+        <label>month<input type="text" id="cf-3" value="*" aria-label="month"></label>
+        <label>weekday<input type="text" id="cf-4" value="*" aria-label="day of week"></label>
+      </div>
+      <div class="cron-line" id="cron-line"></div>
+      <div class="output" id="cron-out"></div>
+    </div>
+  </div>
+
+  <h2>Securing the script</h2>
+  <p>Other people (developers, managers) may need to <em>run</em> the report, but they shouldn't edit it. Use file permissions. Each digit of <code>chmod</code> is a sum of <strong>4 = read, 2 = write, 1 = execute</strong>, given for <em>owner</em>, <em>group</em> and <em>others</em> in that order:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Command</th><th>Owner</th><th>Group</th><th>Others</th><th>Use when</th></tr>
+    <tr><td><code>chmod 750</code></td><td>rwx (7)</td><td>r-x (5)</td><td>none (0)</td><td>Your team can run it; nobody else can</td></tr>
+    <tr><td><code>chmod 770</code></td><td>rwx (7)</td><td>rwx (7)</td><td>none (0)</td><td>Your whole DevOps team maintains it</td></tr>
+    <tr><td><code>chmod 755</code></td><td>rwx (7)</td><td>r-x (5)</td><td>r-x (5)</td><td>Everyone can run it, only you can edit</td></tr>
+  </table></div>
+  <div class="callout warn"><span class="callout-title">Watch out</span>You may see advice to use <code>chmod 711</code> ("others may only execute"). That works for compiled programs, but <strong>not for shell scripts</strong>: Bash must <em>read</em> a script in order to run it, so execute-only users get "Permission denied". Give read + execute (<code>5</code>) to anyone who should run it. Either way, <strong>never put secrets (access keys, passwords) in a script</strong>. Rely on <code>aws configure</code>, IAM roles, or a <a href="25-secrets-management.html">secrets manager</a>.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">You run <code>./aws_resource_list.sh us-east-1 ec2</code>. What is <code>$0</code>?</div>
+    <div class="opts"><button><code>us-east-1</code></button><button><code>ec2</code></button><button><code>./aws_resource_list.sh</code></button></div>
+    <div class="explain"><code>$0</code> is the script's own name; <code>$1</code> is the region and <code>$2</code> is the service.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which crontab schedule runs at 9 PM every day?</div>
+    <div class="opts"><button><code>0 21 * * *</code></button><button><code>21 0 * * *</code></button><button><code>* 21 * * *</code></button></div>
+    <div class="explain">Minute 0, hour 21. <code>21 0</code> means 00:21 (just after midnight), and <code>* 21</code> runs every minute from 21:00 to 21:59.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">The script works in your terminal but cron logs "AWS CLI is not installed". Most likely cause?</div>
+    <div class="opts"><button>cron can't run Bash scripts</button><button>cron's PATH doesn't include /usr/local/bin where <code>aws</code> lives</button><button>The crontab needs <code>chmod 711</code></button></div>
+    <div class="explain">cron uses a minimal PATH. Set PATH in the crontab or script, or call <code>/usr/local/bin/aws</code> directly.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A resource-report script (<code>region</code> + <code>service</code> arguments) is a realistic, interview-friendly DevOps automation that helps control cost.</li>
+      <li>Start with a header (author, version, usage), then validate: argument count, CLI installed, CLI configured. Fail early with <code>exit 1</code>.</li>
+      <li>Use the AWS CLI rather than raw API calls, and a <code>case</code> statement to map each service to its command, with a <code>*)</code> catch-all.</li>
+      <li>Schedule with cron (<code>0 21 * * *</code> = daily 9 PM), using full paths and a proper PATH.</li>
+      <li>Lock it down with <code>chmod</code> (e.g. 750 or 755; scripts need read + execute), and never hard-code secrets.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var RANGES = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
+  var NAMES = ["minute", "hour", "day of month", "month", "day of week"];
+  var MON = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  var inputs = [0, 1, 2, 3, 4].map(function (i) { return document.getElementById("cf-" + i); });
+  var line = document.getElementById("cron-line"), out = document.getElementById("cron-out");
+
+  function parseField(str, idx) {
+    var lo = RANGES[idx][0], hi = RANGES[idx][1], set = {}, any = false;
+    str = str.trim();
+    if (!str) throw new Error(NAMES[idx] + " is empty");
+    str.split(",").forEach(function (part) {
+      var m = part.match(/^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/);
+      if (!m) throw new Error("'" + part + "' is not valid in the " + NAMES[idx] + " field");
+      var a, b, step = m[2] ? parseInt(m[2], 10) : 1;
+      if (step < 1) throw new Error("step must be 1 or more");
+      if (m[1] === "*") { a = lo; b = hi; if (!m[2]) any = true; }
+      else if (m[1].indexOf("-") > 0) { var p = m[1].split("-"); a = +p[0]; b = +p[1]; }
+      else { a = +m[1]; b = m[2] ? hi : a; }
+      if (a < lo || b > hi || a > b) throw new Error(NAMES[idx] + " must be between " + lo + " and " + hi);
+      for (var v = a; v <= b; v += step) set[idx === 4 ? v % 7 : v] = true;
+    });
+    return { set: set, any: any, raw: str };
+  }
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function listOf(f, idx) {
+    var vals = Object.keys(f.set).map(Number).sort(function (a, b) { return a - b; });
+    if (idx === 3) return vals.map(function (v) { return MON[v]; }).join(", ");
+    if (idx === 4) return vals.map(function (v) { return DOW[v]; }).join(", ");
+    return vals.join(", ");
+  }
+  function describe(f) {
+    var parts = [], min = f[0], hr = f[1];
+    var mins = Object.keys(min.set).map(Number), hrs = Object.keys(hr.set).map(Number);
+    if (mins.length === 1 && hrs.length === 1) parts.push("at " + pad(hrs[0]) + ":" + pad(mins[0]));
+    else {
+      parts.push(min.any ? "every minute" : (/^\*\/\d+$/.test(min.raw) ? "every " + min.raw.split("/")[1] + " minutes" : "at minute " + listOf(min, 0)));
+      parts.push(hr.any ? "of every hour" : "during hour " + listOf(hr, 1));
+    }
+    if (f[2].raw.charAt(0) !== "*" && f[4].raw.charAt(0) !== "*") parts.push("on day " + listOf(f[2], 2) + " of the month OR on " + listOf(f[4], 4));
+    else if (!f[2].any) parts.push("on day " + listOf(f[2], 2) + " of the month");
+    else if (!f[4].any) parts.push("on " + listOf(f[4], 4));
+    else parts.push("every day");
+    if (!f[3].any) parts.push("in " + listOf(f[3], 3));
+    var s = parts.join(" ");
+    return s.charAt(0).toUpperCase() + s.slice(1) + ".";
+  }
+  function matches(f, d) {
+    if (!f[0].set[d.getMinutes()] || !f[1].set[d.getHours()] || !f[3].set[d.getMonth() + 1]) return false;
+    var dom = !!f[2].set[d.getDate()], dow = !!f[4].set[d.getDay()];
+    if (f[2].raw.charAt(0) !== "*" && f[4].raw.charAt(0) !== "*") return dom || dow;
+    return dom && dow;
+  }
+  function nextRuns(f, count) {
+    var d = new Date(); d.setSeconds(0, 0); d.setMinutes(d.getMinutes() + 1);
+    var res = [], limit = 60 * 24 * 366 * 2;
+    for (var i = 0; i < limit && res.length < count; i++) {
+      if (matches(f, d)) res.push(new Date(d.getTime()));
+      d.setMinutes(d.getMinutes() + 1);
+    }
+    return res;
+  }
+  function update() {
+    var raw = inputs.map(function (x) { return x.value.trim(); });
+    line.textContent = raw.join(" ") + " /home/ubuntu/aws_resource_list.sh us-east-1 ec2";
+    try {
+      var f = raw.map(parseField);
+      var runs = nextRuns(f, 5);
+      out.className = "output ok";
+      out.innerHTML = "<strong>" + describe(f) + "</strong>" + (runs.length ?
+        "<div class='muted' style='margin-top:6px'>Next runs (your local time):</div><ul>" +
+        runs.map(function (r) { return "<li>" + DOW[r.getDay()] + " " + r.getDate() + " " + MON[r.getMonth() + 1] + " " + r.getFullYear() + ", " + pad(r.getHours()) + ":" + pad(r.getMinutes()) + "</li>"; }).join("") + "</ul>"
+        : "<div class='muted'>This schedule never matches a real date (e.g. 31 February).</div>");
+    } catch (e) {
+      out.className = "output bad";
+      out.textContent = "Invalid: " + e.message;
+    }
+  }
+  inputs.forEach(function (x) { x.addEventListener("input", update); });
+  Array.prototype.forEach.call(document.querySelectorAll("#cron-presets [data-c]"), function (b) {
+    b.addEventListener("click", function () {
+      var v = b.getAttribute("data-c").split(" ");
+      inputs.forEach(function (x, i) { x.value = v[i]; });
+      update();
+    });
+  });
+  update();
+})();
+</script>
+</body>
+</html>

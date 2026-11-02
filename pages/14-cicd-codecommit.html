@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CI/CD Basics &amp; CodeCommit · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="14">
+<main class="wrap">
+  <header class="page-head">
+    <h1>CI/CD Basics &amp; CodeCommit</h1>
+    <p class="lead">CI/CD is how code gets from a developer's laptop to real users, automatically and safely. This lesson explains continuous integration and delivery, the Git basics you need, the AWS "Code" services that make up a pipeline on AWS, and AWS's own Git hosting service, CodeCommit, including why many teams still pick GitHub.</p>
+  </header>
+
+  <h2>The problem: shipping code by hand</h2>
+  <p>Without automation, every release looks like this: someone pulls the latest code, builds it on their machine, runs some tests (if they remember), copies files to a server and restarts the app. It's slow, every person does it a little differently, and bugs slip through. <strong>CI/CD</strong> turns those steps into an automatic <strong>pipeline</strong> that runs on every code change.</p>
+
+  <h2>CI, CD and CD</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Continuous Integration (CI)</h3><p>Developers merge small changes into a shared repository often. <strong>Every change is automatically built and tested.</strong> Problems show up within minutes, while the change is still fresh.</p></div>
+    <div class="card"><h3>Continuous Delivery (CD)</h3><p>Every change that passes CI is automatically packaged and deployed to test/staging, so it's <strong>always ready to release</strong>. Going to production needs one manual approval.</p></div>
+    <div class="card"><h3>Continuous Deployment (CD)</h3><p>Same as delivery, but with <strong>no manual gate</strong>: if every check passes, the change goes straight to production.</p></div>
+    <div class="card"><h3>Pipeline</h3><p>The ordered list of automatic steps (stages) a change goes through: checkout → build → test → scan → package → deploy.</p></div>
+  </div>
+
+  <h3>Typical CI stages</h3>
+  <p>The exact stages differ between companies and between web, mobile and ML apps, but a common set is:</p>
+  <ol>
+    <li><strong>Code checkout</strong>: fetch the commit that triggered the pipeline.</li>
+    <li><strong>Build and unit tests</strong>: compile (e.g. Maven for Java) and run fast automated tests.</li>
+    <li><strong>Static code analysis (SAST)</strong>: scan code for bugs and security issues with tools like SonarQube.</li>
+    <li><strong>Image build, scan and push</strong>: package the app as a Docker image, scan it for vulnerabilities and push it to a registry (<a href="22-ecr.html">Lesson 22</a>).</li>
+  </ol>
+  <p>The <strong>CD</strong> part then deploys that package to servers (EC2), containers (ECS/Kubernetes) or serverless functions.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 230" role="img" aria-label="A developer pushes code to a Git repository. Continuous integration builds, tests and scans it. Continuous delivery deploys it to production for users.">
+      <defs><marker id="arr14a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <path class="s-line-o" d="M124 52 V42 H446 V52"/>
+      <text class="s-text-b" x="285" y="34" text-anchor="middle">Continuous Integration</text>
+      <path class="s-line-o" d="M460 52 V42 H670 V52"/>
+      <text class="s-text-b" x="565" y="34" text-anchor="middle">Continuous Delivery</text>
+      <rect class="s-box" x="10" y="70" width="100" height="70" rx="8"/>
+      <text class="s-text-b" x="60" y="102" text-anchor="middle">Developer</text>
+      <text class="s-text-s" x="60" y="122" text-anchor="middle">git push</text>
+      <rect class="s-orange-soft" x="124" y="70" width="100" height="70" rx="8"/>
+      <text class="s-text-b" x="174" y="102" text-anchor="middle">Git repo</text>
+      <text class="s-text-s" x="174" y="122" text-anchor="middle">webhook</text>
+      <rect class="s-blue" x="236" y="70" width="100" height="70" rx="8"/>
+      <text class="s-text-b" x="286" y="102" text-anchor="middle">Build</text>
+      <text class="s-text-s" x="286" y="122" text-anchor="middle">compile, image</text>
+      <rect class="s-blue" x="348" y="70" width="100" height="70" rx="8"/>
+      <text class="s-text-b" x="398" y="102" text-anchor="middle">Test, scan</text>
+      <text class="s-text-s" x="398" y="122" text-anchor="middle">unit, SAST</text>
+      <rect class="s-purple" x="460" y="70" width="100" height="70" rx="8"/>
+      <text class="s-text-b" x="510" y="102" text-anchor="middle">Deploy</text>
+      <text class="s-text-s" x="510" y="122" text-anchor="middle">EC2 / K8s</text>
+      <rect class="s-green" x="572" y="70" width="98" height="70" rx="8"/>
+      <text class="s-text-b" x="621" y="102" text-anchor="middle">Users</text>
+      <text class="s-text-s" x="621" y="122" text-anchor="middle">production</text>
+      <path class="s-line" d="M110 105 H122" marker-end="url(#arr14a)"/>
+      <path class="s-line" d="M224 105 H234" marker-end="url(#arr14a)"/>
+      <path class="s-line" d="M336 105 H346" marker-end="url(#arr14a)"/>
+      <path class="s-line" d="M448 105 H458" marker-end="url(#arr14a)"/>
+      <path class="s-line" d="M560 105 H570" marker-end="url(#arr14a)"/>
+      <path class="s-line" d="M398 140 V180 H60 V142" marker-end="url(#arr14a)" style="stroke-dasharray:5 4"/>
+      <text class="s-text-s" x="229" y="200" text-anchor="middle">fail → developer is notified fast and fixes it</text>
+    </svg>
+    <figcaption>One push starts the whole chain. A failure at any stage stops the pipeline before bad code reaches users.</figcaption>
+  </figure>
+
+  <div class="demo" id="demo-pipe">
+    <div class="demo-head">Try it: run a pipeline</div>
+    <div class="demo-body">
+      <p>Push a commit and watch it move through the stages. Then try pushing a bug, or adding a manual approval gate to see the difference between continuous <em>delivery</em> and continuous <em>deployment</em>.</p>
+      <div class="row">
+        <label><input type="checkbox" id="pp-bug"> Commit contains a bug (a unit test will fail)</label>
+      </div>
+      <div class="row">
+        <label><input type="checkbox" id="pp-gate"> Require manual approval before production</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="pp-run">git push</button>
+        <button class="btn" id="pp-approve" disabled>Approve release</button>
+      </div>
+      <div id="pp-stages" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px"></div>
+      <div class="output" id="pp-out">Waiting for a commit…</div>
+    </div>
+  </div>
+
+  <h2>CI/CD tools, and the AWS versions</h2>
+  <p>A classic open-source setup uses four kinds of tools. AWS offers a managed service for each role:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Role</th><th>Common tool</th><th>AWS managed service</th></tr></thead>
+    <tbody>
+      <tr><td>Host the code (version control)</td><td>GitHub, GitLab, Bitbucket</td><td><strong>CodeCommit</strong> (this lesson)</td></tr>
+      <tr><td>Orchestrate the pipeline</td><td>Jenkins, GitHub Actions, GitLab CI</td><td><strong>CodePipeline</strong> (<a href="15-codepipeline.html">Lesson 15</a>)</td></tr>
+      <tr><td>Build and test</td><td>Maven, Docker, SonarQube steps in Jenkins</td><td><strong>CodeBuild</strong> (<a href="16-codebuild-ci.html">Lesson 16</a>)</td></tr>
+      <tr><td>Deploy</td><td>Argo CD, Ansible, shell scripts</td><td><strong>CodeDeploy</strong> (<a href="17-codedeploy-cd.html">Lesson 17</a>)</td></tr>
+    </tbody>
+  </table></div>
+  <p>The match-up isn't exact, but it's a useful map. With these four services you can run the whole CI/CD process inside AWS without installing Jenkins anywhere.</p>
+
+  <h2>Git basics you'll need</h2>
+  <p><strong>Git</strong> is a version control system: it records every change to your files so you can see who changed what, go back in time, and work in parallel. Services like GitHub and CodeCommit <em>host</em> Git repositories.</p>
+  <ul>
+    <li><strong>Repository (repo)</strong>: a project folder plus its full history.</li>
+    <li><strong>Commit</strong>: a saved snapshot with a message ("fix login bug").</li>
+    <li><strong>Branch</strong>: a separate line of work. <strong>Pull request</strong>: a request to merge a branch, where teammates review the code.</li>
+    <li><strong>Clone / push / pull</strong>: copy a remote repo to your machine / send your commits up / bring others' commits down.</li>
+  </ul>
+<pre><code>git --version                              # check Git is installed
+git clone &lt;repo-url&gt;                       # copy the repo locally
+cd demo-repo-cc
+git config --global user.name  "Your Name" # one-time identity setup
+git config --global user.email "you@example.com"
+echo "hello" &gt; test.txt
+git add test.txt                           # stage the change
+git commit -m "Add test file"              # snapshot it
+git push                                   # send it to the remote repo</code></pre>
+
+  <h2>What is AWS CodeCommit?</h2>
+  <p><strong>CodeCommit</strong> is AWS's <strong>managed, private Git hosting</strong>, similar to GitHub or GitLab, but running inside your AWS account.</p>
+  <h3>Why would anyone use it?</h3>
+  <p>Inside companies, code is rarely in public repos. Teams use private GitHub repos, GitHub Enterprise, or run <strong>self-hosted GitLab</strong> on their own servers. Self-hosting means someone must add servers as repos and teams grow, patch them, secure them and keep them up. CodeCommit removes that work, just as EC2 took over compute and S3 took over storage:</p>
+  <ul>
+    <li><strong>Managed</strong>: no Git servers to install, patch or back up.</li>
+    <li><strong>Scales automatically</strong>: 1 repo or 10,000, and you pay for what you use.</li>
+    <li><strong>Reliable</strong>: run by AWS with a service-level agreement (SLA).</li>
+    <li><strong>Always private</strong>: repos can't be made public. Access is controlled with <a href="03-iam.html">IAM</a>.</li>
+    <li><strong>Native AWS integration</strong> with CodePipeline, CloudWatch, SNS and so on.</li>
+  </ul>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>Renting a managed safe-deposit vault for your code inside your own AWS building, instead of buying, guarding and maintaining your own safes.</div>
+
+  <h2>Hands-on: create and use a repository</h2>
+  <ol class="steps">
+    <li>In the console, search for <strong>CodeCommit</strong> and click <strong>Create repository</strong>. Name it (e.g. <code>demo-repo-cc</code>) and add a description. You can leave <em>CodeGuru Reviewer</em> off; it's an optional code reviewer limited to Java and Python.</li>
+    <li>The repo page has what you'd expect: a clone URL, files, commits, branches and pull requests. You can <strong>upload or edit files in the browser</strong>, but only <em>one file at a time</em>. For real work you'll use Git from a terminal or VS Code.</li>
+    <li><strong>Create an IAM user</strong> (don't use root: SSH access doesn't work with the root user, and AWS warns against it). Attach the managed policy <code>AWSCodeCommitPowerUser</code>, which covers everything short of deleting repos, including notification integrations.</li>
+    <li>For that user, go to IAM → Users → <em>Security credentials</em> → <strong>HTTPS Git credentials for AWS CodeCommit</strong> → <em>Generate</em>. This gives a special Git username and password. (Alternatives: SSH keys, or the <code>git-remote-codecommit</code> helper.)</li>
+    <li>Sign in as the IAM user (account ID + username + password) and make sure you're in the <strong>same region</strong> as the repo. Repos are regional, so a different region shows an empty list.</li>
+    <li>Copy the <strong>HTTPS clone URL</strong> and clone it. Git asks for the credentials from step 4. Then add, commit and push a file and watch it appear in the console.</li>
+  </ol>
+<pre><code>git clone https://git-codecommit.us-east-1.amazonaws.com/v1/repos/demo-repo-cc</code></pre>
+  <div class="callout tip"><span class="callout-title">Tip</span>Authentication fails even with correct credentials? Your machine may be sending other saved Git credentials (e.g. for GitHub) from its credential manager. Clear the stored entry for <code>git-codecommit.*.amazonaws.com</code> and try again.</div>
+
+  <h2>The catch: why many teams skip CodeCommit</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Pros</h3><ul><li>Fully managed, scales on its own</li><li>Private by default, IAM-based access</li><li>Smooth integration with other AWS services</li><li>AWS reliability and support</li></ul></div>
+    <div class="card"><h3>Cons</h3><ul><li><strong>Far fewer features</strong> than GitHub/GitLab: no Copilot-style AI help, no built-in CI like Actions or Auto DevOps, no in-browser VS Code</li><li>Integrations mostly limited to AWS services, with few third-party ones</li><li>Plainer user interface</li><li>Ties your code hosting to AWS</li></ul></div>
+  </div>
+  <p>Because of this, even companies that run everything else on AWS often keep their code in GitHub, GitLab or Bitbucket. That's why the following lessons connect CodePipeline to <strong>GitHub</strong>. It's the more common real-world setup, and more useful to talk about in interviews.</p>
+  <div class="callout"><span class="callout-title">Status note</span>CodeCommit stopped accepting new customers in June 2024, then AWS reversed that decision and returned it to general availability on 24 November 2025. New accounts can create repositories again.</div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"CodeCommit or GitHub?" Show you know the trade-off: <em>CodeCommit removes the work of self-hosting Git and keeps code private inside AWS, but GitHub/GitLab have a much richer feature set and ecosystem, so most teams use them and connect them to CodePipeline.</em></div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What is the difference between continuous delivery and continuous deployment?</div>
+    <div class="opts"><button>Delivery skips testing; deployment includes it</button><button>Delivery has a manual approval before production; deployment releases automatically if all checks pass</button><button>They are two names for continuous integration</button></div>
+    <div class="explain">Both automate build, test and release prep. Only continuous deployment pushes to production with no human gate.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Which AWS service plays the role of the "pipeline orchestrator", like Jenkins?</div>
+    <div class="opts"><button>CodeCommit</button><button>CodeDeploy</button><button>CodePipeline</button></div>
+    <div class="explain">CodePipeline orchestrates the stages. CodeCommit hosts code, CodeBuild builds/tests, CodeDeploy deploys.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Why is CodeCommit used less than GitHub, even by AWS-only companies?</div>
+    <div class="opts"><button>It has far fewer features and third-party integrations</button><button>Its repositories are public by default</button><button>It can't be used with Git</button></div>
+    <div class="explain">CodeCommit is real Git and always private, but its feature set and ecosystem are much thinner than GitHub's or GitLab's.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><strong>CI</strong> = every change is automatically built and tested. <strong>Continuous delivery</strong> = always release-ready, with a manual prod gate. <strong>Continuous deployment</strong> = no gate.</li>
+      <li>A pipeline is a chain of stages (checkout → build → test → scan → package → deploy) triggered by a Git push.</li>
+      <li>AWS's CI/CD services: <strong>CodeCommit</strong> (code), <strong>CodePipeline</strong> (orchestration), <strong>CodeBuild</strong> (build/test), <strong>CodeDeploy</strong> (deploy).</li>
+      <li>CodeCommit is managed, private, scalable Git. Use an IAM user with <code>AWSCodeCommitPowerUser</code> and HTTPS Git credentials, not root.</li>
+      <li>Its weak spot is features and integrations, so many teams pair GitHub/GitLab with the other AWS Code services.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var base = ["Checkout", "Build", "Unit tests", "Code scan", "Image push", "Deploy staging"];
+  var stages = [], state = [], timer = null, idx = 0, waiting = false;
+  var box = $("pp-stages"), out = $("pp-out");
+  var C = { pending: ["var(--surface-2)", "var(--border)", "○"], run: ["var(--orange-soft)", "var(--orange)", "◐"], ok: ["var(--green-soft)", "var(--green)", "✓"], bad: ["var(--red-soft)", "var(--red)", "✕"], wait: ["var(--purple-soft)", "var(--purple)", "⏸"], skip: ["var(--surface-2)", "var(--border)", "–"] };
+  function build() {
+    stages = base.slice();
+    stages.push($("pp-gate").checked ? "Manual approval" : null);
+    stages.push("Deploy prod");
+    stages = stages.filter(Boolean);
+    state = stages.map(function () { return "pending"; });
+    draw();
+  }
+  function draw() {
+    box.innerHTML = "";
+    stages.forEach(function (s, i) {
+      var c = C[state[i]], d = document.createElement("div");
+      d.style.cssText = "padding:6px 10px;border-radius:8px;font-size:14px;font-weight:600;border:1.5px solid " + c[1] + ";background:" + c[0] + ";color:var(--text)";
+      d.textContent = c[2] + " " + s;
+      box.appendChild(d);
+    });
+  }
+  function log(msg, cls) { out.className = "output" + (cls ? " " + cls : ""); out.textContent = msg; }
+  function step() {
+    if (idx >= stages.length) { log("Done. The change is live in production" + ($("pp-gate").checked ? " after a human approved it (continuous delivery)." : " with no human step (continuous deployment)."), "ok"); finish(); return; }
+    var name = stages[idx];
+    if (name === "Manual approval") {
+      state[idx] = "wait"; draw(); waiting = true; $("pp-approve").disabled = false;
+      log("Paused: staging is updated. A release manager must approve before production.");
+      return;
+    }
+    state[idx] = "run"; draw(); log("Running: " + name + "…");
+    timer = setTimeout(function () {
+      if (name === "Unit tests" && $("pp-bug").checked) {
+        state[idx] = "bad";
+        for (var j = idx + 1; j < stages.length; j++) state[j] = "skip";
+        draw();
+        log("✕ Unit tests failed (expected 200, got 500). The pipeline stopped and the developer was notified. Nothing reached users.", "bad");
+        finish(); return;
+      }
+      state[idx] = "ok"; draw(); idx++; step();
+    }, 650);
+  }
+  function finish() { $("pp-run").disabled = false; $("pp-bug").disabled = false; $("pp-gate").disabled = false; }
+  $("pp-run").onclick = function () {
+    clearTimeout(timer); build(); idx = 0; waiting = false;
+    $("pp-run").disabled = true; $("pp-bug").disabled = true; $("pp-gate").disabled = true; $("pp-approve").disabled = true;
+    log("Webhook received: new commit on main. Starting pipeline…");
+    timer = setTimeout(step, 500);
+  };
+  $("pp-approve").onclick = function () {
+    if (!waiting) return;
+    waiting = false; $("pp-approve").disabled = true;
+    state[idx] = "ok"; draw(); idx++; step();
+  };
+  $("pp-gate").addEventListener("change", build);
+  build();
+})();
+</script>
+</body>
+</html>

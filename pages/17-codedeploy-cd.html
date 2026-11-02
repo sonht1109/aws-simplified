@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project: CD with CodeDeploy · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .hook-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 6px; }
+  .hook-list li { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); margin: 0; font-size: 15px; }
+  .hook-list .h-name { font-family: var(--mono); font-weight: 700; font-size: 14px; }
+  .hook-list .h-note { display: block; font-size: 13px; color: var(--text-2); font-family: var(--font); font-weight: 400; }
+  .hook-list .h-st { font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-2); white-space: nowrap; }
+  .hook-list li.run { border-color: var(--orange); background: var(--orange-soft); }
+  .hook-list li.ok .h-st { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+  .hook-list li.fail { border-color: var(--red); background: var(--red-soft); }
+  .hook-list li.fail .h-st { color: var(--red); border-color: var(--red); }
+  .hook-list li.script .h-name::after { content: " (script)"; color: var(--orange-strong); font-weight: 600; font-family: var(--font); font-size: 12px; }
+  .opt-list { display: grid; gap: 6px; margin: 8px 0; }
+  .opt-list label { display: flex; gap: 8px; align-items: flex-start; }
+  .opt-list input { margin-top: 5px; accent-color: var(--orange); }
+</style>
+</head>
+<body data-page="17">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Project: CD with CodeDeploy</h1>
+    <p class="lead">Finish the pipeline from the previous lesson. After CodeBuild pushes a new Docker image, CodeDeploy automatically pulls it onto an EC2 server and runs it. By the end, one git commit takes your code all the way to a running app.</p>
+  </header>
+
+  <div class="xref-box"><div>This continues <a href="16-codebuild-ci.html">Lesson 16: CI with CodeBuild</a>. Do that first: CD isn't much use without a CI pipeline that produces something to deploy.</div></div>
+
+  <h2>The complete CI/CD picture</h2>
+  <p>CodePipeline stays the orchestrator. It now has three stages: <b>Source</b> (GitHub) → <b>Build</b> (CodeBuild) → <b>Deploy</b> (CodeDeploy). CodeDeploy doesn't copy a Docker image itself. It tells a small program on the server (the <b>CodeDeploy agent</b>) to run your scripts, and those scripts pull and start the image.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 290" role="img" aria-label="GitHub triggers CodePipeline. CodePipeline first runs CodeBuild, which pushes an image to Docker Hub, then runs CodeDeploy, which tells the agent on a tagged EC2 instance to pull the image and run it.">
+      <defs><marker id="arr17" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="10" y="110" width="100" height="56" rx="8"/>
+      <text class="s-text-b" x="60" y="136" text-anchor="middle">GitHub</text>
+      <text class="s-text-s" x="60" y="154" text-anchor="middle">commit</text>
+      <path class="s-line" d="M110 138 H132" marker-end="url(#arr17)"/>
+      <rect class="s-ink" x="135" y="110" width="130" height="56" rx="8"/>
+      <text class="s-text-w" x="200" y="136" text-anchor="middle">CodePipeline</text>
+      <text class="s-text-w" x="200" y="154" text-anchor="middle" style="font-weight:400;font-size:12px">orchestrator</text>
+      <path class="s-line" d="M265 128 C 283 128, 280 58, 297 58" marker-end="url(#arr17)"/>
+      <path class="s-line" d="M265 148 C 283 148, 280 218, 297 218" marker-end="url(#arr17)"/>
+      <text class="s-text-s" x="270" y="98">1</text>
+      <text class="s-text-s" x="270" y="190">2</text>
+      <rect class="s-orange-soft" x="300" y="30" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="365" y="56" text-anchor="middle">CodeBuild</text>
+      <text class="s-text-s" x="365" y="74" text-anchor="middle">build + push</text>
+      <path class="s-line-o" d="M430 58 H477" marker-end="url(#arr17)"/>
+      <rect class="s-blue" x="480" y="30" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="545" y="56" text-anchor="middle">Docker Hub</text>
+      <text class="s-text-s" x="545" y="74" text-anchor="middle">image:latest</text>
+      <rect class="s-orange-soft" x="300" y="190" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="365" y="216" text-anchor="middle">CodeDeploy</text>
+      <text class="s-text-s" x="365" y="234" text-anchor="middle">appspec.yml</text>
+      <path class="s-line" d="M430 218 H467" marker-end="url(#arr17)"/>
+      <rect class="s-green" x="470" y="160" width="200" height="118" rx="10"/>
+      <text class="s-text-b" x="570" y="184" text-anchor="middle">EC2 instance</text>
+      <text class="s-text-s" x="570" y="204" text-anchor="middle">tag Name = sample-python</text>
+      <rect class="s-box" x="490" y="214" width="160" height="26" rx="5"/>
+      <text class="s-text" x="570" y="232" text-anchor="middle">CodeDeploy agent</text>
+      <text class="s-text-s" x="570" y="264" text-anchor="middle">docker run -p 5000:5000</text>
+      <path class="s-line" d="M545 86 V157" marker-end="url(#arr17)"/>
+      <text class="s-text-s" x="552" y="128">docker pull</text>
+    </svg>
+    <figcaption>CI (top branch) produces the image; CD (bottom branch) gets it running on EC2.</figcaption>
+  </figure>
+
+  <h2>CodeDeploy's building blocks</h2>
+  <p><b>CodeDeploy</b> is AWS's managed deployment service. It can deploy to EC2 (and on-premises servers), ECS, or Lambda. This project uses EC2. Five terms to know:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Application</h3><p>A named container for one thing you deploy. Usually one per microservice: <code>payments</code>, <code>login</code>, and so on. It's like a folder. On its own it doesn't know where or how to deploy.</p></div>
+    <div class="card"><h3>Deployment group</h3><p>The <i>where</i>: the set of servers to deploy to, picked by <b>tags</b>. Similar to a load balancer's target group.</p></div>
+    <div class="card"><h3>Deployment</h3><p>One actual rollout of one version (a <i>revision</i>) of your code, taken from GitHub or S3, to a deployment group.</p></div>
+    <div class="card"><h3>appspec.yml</h3><p>The <i>how</i>: a file in your repo listing which scripts to run at each step of the deployment. It's CodeDeploy's version of <code>buildspec.yml</code>.</p></div>
+    <div class="card"><h3>CodeDeploy agent</h3><p>A small program installed on each target server. It checks in with CodeDeploy, downloads the revision and runs your scripts. Like a Jenkins agent or a GitHub Actions runner.</p></div>
+  </div>
+
+  <h2>Step 1: Create the application</h2>
+  <p>Open <b>CodeDeploy → Applications → Create application</b>. Give it a name (e.g. <code>sample-python-flask-app</code>) and choose compute platform <b>EC2/On-premises</b>. In a company with 200 microservices you'd repeat this 200 times, which is why teams script it with the <a href="12-aws-cli.html">CLI</a> once they understand the steps in the console.</p>
+
+  <h2>Step 2: Launch and tag the EC2 instance</h2>
+  <p>Launch an Ubuntu <code>t2.micro</code> in the default VPC with a public IP and your key pair (<a href="04-ec2.html">Lesson 4</a> covers this). The new part is the <b>tag</b>.</p>
+  <p>A <b>tag</b> is a key/value label you attach to an AWS resource, such as <code>Name = sample-python</code> or <code>project = payments</code>. CodeDeploy uses tags to find its targets. There could be many instances called "example.com" in an account, but a deployment group that says "every instance tagged <code>Name = sample-python</code>" is clear. This also scales: tag 10 more servers the same way and they automatically become deployment targets.</p>
+  <div class="xref-box"><div>Tags also matter for tracking cost and ownership across teams. Tagging best practices are covered in <a href="36-reduce-aws-bill.html">Lesson 36: Reducing Your AWS Bill</a>.</div></div>
+
+  <h2>Step 3: Install the CodeDeploy agent</h2>
+  <p>SSH into the instance (<a href="05-connect-to-ec2.html">Lesson 5</a>) and follow these steps exactly. Skipped steps here cause most CodeDeploy problems. The agent is written in Ruby, so install Ruby first. The download bucket must match your instance's region; for <code>us-east-1</code> it looks like this:</p>
+<pre><code>sudo apt update
+sudo apt install -y ruby-full wget
+cd /home/ubuntu
+
+# bucket name + region must match where your instance runs
+wget https://aws-codedeploy-us-east-1.s3.us-east-1.amazonaws.com/latest/install
+chmod +x ./install
+sudo ./install auto
+
+# check it's running; start it if it says "No AWS CodeDeploy agent running"
+sudo service codedeploy-agent status
+sudo service codedeploy-agent start</code></pre>
+  <p>While you're there, install Docker too, since your deploy scripts will need it:</p>
+<pre><code>sudo apt install -y docker.io</code></pre>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Forgetting Docker on the server is a classic first failure. The deployment reaches your start script and fails with <code>docker: command not found</code>.</div>
+
+  <h2>Step 4: Give the instance and CodeDeploy their roles</h2>
+  <p>Two things need AWS permissions, and both get them from <b>IAM roles</b> (roles are for services, users are for people, as covered in <a href="03-iam.html">Lesson 3</a>):</p>
+  <ul>
+    <li><b>The EC2 instance</b>, so the agent on it can talk to CodeDeploy and fetch revisions. Create a role with EC2 as the trusted service, then attach it: instance → <i>Actions → Security → Modify IAM role</i>.</li>
+    <li><b>CodeDeploy itself</b>, so it can look up your instances and tags. Create a role with CodeDeploy as the trusted service (it suggests the <code>AWSCodeDeployRole</code> policy). You'll pick this as the deployment group's service role.</li>
+  </ul>
+  <p>For a quick demo, one role with broad EC2 + CodeDeploy permissions works. In real projects, keep them separate and give each one only the permissions it needs.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>After you attach or change the instance's IAM role, <b>restart the agent</b> (<code>sudo service codedeploy-agent restart</code>) and check its status again. Otherwise the agent may keep using its old (missing) credentials and never connect.</div>
+
+  <h2>Step 5: Create the deployment group</h2>
+  <ol class="steps">
+    <li>Open your application → <b>Create deployment group</b>. Name it and choose the CodeDeploy service role.</li>
+    <li><b>Deployment type:</b> choose <b>In-place</b> (update the existing servers). <i>Blue/green</i> creates a second set of servers and switches traffic over through a <a href="28-load-balancers.html">load balancer</a>. It's safer, but more setup than we need here.</li>
+    <li><b>Environment configuration:</b> Amazon EC2 instances, tag <code>Name</code> = <code>sample-python</code>. The console immediately says <b>"1 unique matched instance"</b>. Type a wrong value and it drops to 0, which is a handy check.</li>
+    <li>Agent install: skip it (you already installed it). Load balancer: untick. Create.</li>
+  </ol>
+
+  <h2>Step 6: Write appspec.yml and the scripts</h2>
+  <p>When the source is GitHub, <code>appspec.yml</code> <b>must sit at the root of the repository</b> and have exactly that name. (CodeBuild let you put the buildspec anywhere; CodeDeploy doesn't.) For this project it runs two scripts:</p>
+<pre><code>version: 0.0
+os: linux
+hooks:
+  ApplicationStop:
+    - location: scripts/stop_container.sh
+      timeout: 300
+      runas: root
+  AfterInstall:
+    - location: scripts/start_container.sh
+      timeout: 300
+      runas: root</code></pre>
+  <p><code>scripts/start_container.sh</code> pulls the image CI just pushed and runs it. The app listens on port 5000 (that's what the Dockerfile exposes), so map host 5000 to container 5000:</p>
+<pre><code>#!/bin/bash
+set -e
+docker pull &lt;your-dockerhub-user&gt;/simple-python-flask-app:latest
+docker run -d -p 5000:5000 &lt;your-dockerhub-user&gt;/simple-python-flask-app:latest</code></pre>
+  <p><code>scripts/stop_container.sh</code> removes the container from the previous deployment. Without it, the next deployment fails because port 5000 is already in use:</p>
+<pre><code>#!/bin/bash
+# Remove any running containers so port 5000 is free
+container_ids=$(docker ps -q)
+if [ -n "$container_ids" ]; then
+  docker rm -f $container_ids
+fi</code></pre>
+  <div class="callout"><span class="callout-title">Note</span>You'll often see this written as <code>docker ps | awk '{print $1}'</code> to grab the container ID from the first column. That works if you skip the header row. <code>docker ps -q</code> prints just the IDs, so you don't need to deal with the header.</div>
+
+  <h3>The lifecycle hooks</h3>
+  <p>A deployment on EC2 moves through fixed steps called <b>lifecycle events</b>. You attach scripts to the ones you care about, which are called <b>hooks</b>. In order:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Event</th><th>What happens</th><th>Your script?</th></tr>
+    <tr><td><code>ApplicationStop</code></td><td>Stop the old version. Runs the stop script from the <i>previous</i> revision, so it does nothing on the very first deployment.</td><td>Yes</td></tr>
+    <tr><td><code>DownloadBundle</code></td><td>Agent downloads the revision (your repo at that commit).</td><td>No (agent)</td></tr>
+    <tr><td><code>BeforeInstall</code></td><td>Prep work, e.g. backups, before files are copied.</td><td>Optional</td></tr>
+    <tr><td><code>Install</code></td><td>Agent copies files to their destination.</td><td>No (agent)</td></tr>
+    <tr><td><code>AfterInstall</code></td><td>Configure or start things after the copy. We start the container here.</td><td>Yes</td></tr>
+    <tr><td><code>ApplicationStart</code></td><td>Start services (a common alternative place to start the app).</td><td>Optional</td></tr>
+    <tr><td><code>ValidateService</code></td><td>Check the new version works, e.g. curl a health endpoint.</td><td>Optional</td></tr>
+  </table></div>
+
+  <div class="demo" id="demo-cd">
+    <div class="demo-head">Try it: run a CodeDeploy deployment</div>
+    <div class="demo-body">
+      <p>Set up the situation, then deploy. Watch each lifecycle event the way you would in the console's <i>View events</i> page. Try a second deployment with the old container still running and the stop script left as a placeholder.</p>
+      <div class="opt-list">
+        <label><input type="checkbox" id="cd-appspec" checked> <code>appspec.yml</code> is at the repo root</label>
+        <label><input type="checkbox" id="cd-docker"> Docker is installed on the EC2 instance</label>
+        <label><input type="checkbox" id="cd-old"> A container from an earlier deployment is still running</label>
+        <label><input type="checkbox" id="cd-stop"> <code>stop_container.sh</code> really removes containers (not just <code>echo hi</code>)</label>
+      </div>
+      <div class="row"><button class="btn primary" id="cd-go">Create deployment</button></div>
+      <ul class="hook-list" id="cd-hooks"></ul>
+      <div class="output" id="cd-out">Deployment status appears here.</div>
+    </div>
+  </div>
+
+  <h2>Step 7: Test a deployment by hand</h2>
+  <p>Before connecting it to the pipeline, check that CD works by itself. In your application → <b>Create deployment</b>: pick the deployment group, revision type <b>"My application is stored in GitHub"</b>, connect your GitHub account, enter <code>user/repo</code> and a <b>commit ID</b> (copy it from the repo's commit history). Leave the rest at defaults and create.</p>
+  <p>If something fails, open the deployment → <b>View events</b>. It shows which lifecycle event failed and the script's error output. These are the failures you'll most likely see:</p>
+  <ul>
+    <li>Fails right after downloading → no <code>appspec.yml</code> at the repo root.</li>
+    <li><code>AfterInstall</code> fails with <code>docker: command not found</code> → install <code>docker.io</code> on the instance.</li>
+    <li><code>AfterInstall</code> fails with "port is already allocated" → an old container still holds port 5000. Fix <code>stop_container.sh</code> (or remove it once by hand with <code>sudo docker rm -f &lt;id&gt;</code>).</li>
+  </ul>
+  <p>When it succeeds, <code>sudo docker ps</code> on the instance shows the container running. To open the app in a browser at <code>http://&lt;public-ip&gt;:5000</code>, allow inbound port 5000 in the instance's <a href="07-security-groups-nacl.html">security group</a>.</p>
+
+  <h2>Step 8: Add the Deploy stage to CodePipeline</h2>
+  <ol class="steps">
+    <li>Open the pipeline from the CI lesson → <b>Edit</b> → <b>Add stage</b> after Build (name it e.g. <code>Deploy</code>).</li>
+    <li><b>Add action group</b>: action provider <b>AWS CodeDeploy</b>, input artifact <code>SourceArtifact</code> (the repo, which contains <code>appspec.yml</code> and the scripts), then your application name and deployment group.</li>
+    <li>Save. Commit a small change, or click <b>Release change</b>, and watch Source → Build → Deploy all turn green.</li>
+  </ol>
+  <p>That's full CI/CD on AWS: a commit triggers the pipeline, CodeBuild builds and pushes a new image, and CodeDeploy pulls it onto the server and restarts the container.</p>
+
+  <div class="callout tip"><span class="callout-title">Tip: tag your images</span>This project uses the <code>latest</code> tag everywhere for simplicity. In real pipelines, push each image with a unique tag (a version number, a date/time stamp, or the commit ID) and have the deploy script pull <i>that same tag</i>. The rule: whatever tag CI pushes, CD must pull. Unique tags also let you see exactly which version is running and roll back to an earlier one.</div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How does CodeDeploy know which servers to deploy to?" Through the deployment group, which selects instances by <b>tags</b> (or an Auto Scaling group). And each instance needs the CodeDeploy <b>agent</b> running, plus an IAM role that lets it talk to CodeDeploy.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Your app's source is on GitHub. Where must <code>appspec.yml</code> be?</div>
+    <div class="opts"><button>Anywhere; you set its path in the deployment group</button><button>At the root of the repository</button><button>On the EC2 instance in /etc/codedeploy</button></div>
+    <div class="explain">For GitHub revisions, CodeDeploy looks for <code>appspec.yml</code> at the root of the revision. Unlike CodeBuild's buildspec, its location can't be changed.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">The second deployment fails in <code>AfterInstall</code> with "port is already allocated". The cleanest fix is…</div>
+    <div class="opts"><button>Change the host port every deployment</button><button>Reinstall the CodeDeploy agent</button><button>Make the ApplicationStop script remove the running container</button></div>
+    <div class="explain">The old container still holds port 5000. A proper stop script frees it before the new container starts. Changing ports just moves the problem to the next deployment.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You just attached an IAM role to the EC2 instance. What should you do next?</div>
+    <div class="opts"><button>Restart the CodeDeploy agent</button><button>Recreate the CodeDeploy application</button><button>Reboot CodePipeline</button></div>
+    <div class="explain">Restart the agent so it picks up the new credentials. Otherwise it may not be able to reach CodeDeploy.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>CodeDeploy = <b>application</b> (what) + <b>deployment group</b> (where, chosen by tags) + <b>appspec.yml</b> (how) + an <b>agent</b> on every target server.</li>
+      <li>Install the agent (Ruby + region-specific installer), give the instance an IAM role, and restart the agent after role changes.</li>
+      <li><code>appspec.yml</code> lives at the repo root and attaches scripts to lifecycle hooks like <code>ApplicationStop</code> and <code>AfterInstall</code>.</li>
+      <li>Always write a real stop script. Otherwise the second deployment hits "port already allocated".</li>
+      <li>Add CodeDeploy as the Deploy stage in CodePipeline to get one-commit-to-production CI/CD. Use matching, unique image tags in CI and CD.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var HOOKS = [
+    { n: "ApplicationStop", script: true },
+    { n: "DownloadBundle" },
+    { n: "BeforeInstall" },
+    { n: "Install" },
+    { n: "AfterInstall", script: true },
+    { n: "ApplicationStart" },
+    { n: "ValidateService" }
+  ];
+  var list = document.getElementById("cd-hooks");
+  var out = document.getElementById("cd-out");
+  var timer = null;
+  function c(id) { return document.getElementById(id).checked; }
+
+  function render(rows) {
+    list.innerHTML = "";
+    rows.forEach(function (r, i) {
+      var li = document.createElement("li");
+      li.className = (HOOKS[i].script ? "script " : "") + (r.cls || "");
+      var left = document.createElement("span");
+      var nm = document.createElement("span");
+      nm.className = "h-name"; nm.textContent = HOOKS[i].n;
+      left.appendChild(nm);
+      if (r.note) { var note = document.createElement("span"); note.className = "h-note"; note.textContent = r.note; left.appendChild(note); }
+      var st = document.createElement("span");
+      st.className = "h-st"; st.textContent = r.st || "Pending";
+      li.appendChild(left); li.appendChild(st);
+      list.appendChild(li);
+    });
+  }
+
+  function plan() {
+    var appspec = c("cd-appspec"), docker = c("cd-docker"), old = c("cd-old"), stop = c("cd-stop");
+    var r = [];
+    if (old) {
+      r.push({ ok: true, note: stop ? "stop_container.sh: docker rm -f <old container>" : "stop_container.sh: echo hi (old container keeps running!)" });
+    } else {
+      r.push({ ok: true, note: "First deployment: no previous revision to stop" });
+    }
+    r.push({ ok: true, note: "Agent downloads the repo at the chosen commit" });
+    if (!appspec) { r.push({ ok: false, note: "The CodeDeploy agent did not find an AppSpec file at the root of the revision" }); return r; }
+    r.push({ ok: true, note: "No script configured" });
+    r.push({ ok: true, note: "Agent copies files into place" });
+    if (!docker) { r.push({ ok: false, note: "start_container.sh: docker: command not found" }); return r; }
+    if (old && !stop) { r.push({ ok: false, note: "docker run: Bind for 0.0.0.0:5000 failed: port is already allocated" }); return r; }
+    r.push({ ok: true, note: "start_container.sh: docker pull + docker run -d -p 5000:5000" });
+    r.push({ ok: true, note: "No script configured" });
+    r.push({ ok: true, note: "No script configured" });
+    return r;
+  }
+
+  function run() {
+    if (timer) clearTimeout(timer);
+    var p = plan();
+    var rows = HOOKS.map(function () { return {}; });
+    out.className = "output"; out.textContent = "Deployment in progress...";
+    render(rows);
+    var i = 0;
+    function step() {
+      if (i < p.length) {
+        rows[i] = { cls: "run", st: "In progress", note: p[i].note };
+        render(rows);
+        timer = setTimeout(function () {
+          rows[i] = { cls: p[i].ok ? "ok" : "fail", st: p[i].ok ? "Succeeded" : "Failed", note: p[i].note };
+          render(rows);
+          if (!p[i].ok) {
+            for (var k = i + 1; k < HOOKS.length; k++) rows[k] = { st: "Skipped" };
+            render(rows);
+            out.className = "output bad";
+            out.textContent = "Deployment FAILED at " + HOOKS[i].n + ". Read the error, fix it, and create a new deployment.";
+            return;
+          }
+          i++;
+          timer = setTimeout(step, 250);
+        }, 550);
+      } else {
+        out.className = "output ok";
+        out.textContent = "Deployment SUCCEEDED. The new container is running on port 5000. That container is still running, so the next deployment starts with one in place (box ticked). Deploy again and see what happens.";
+        document.getElementById("cd-old").checked = true;
+      }
+    }
+    step();
+  }
+
+  render(HOOKS.map(function () { return {}; }));
+  document.getElementById("cd-go").addEventListener("click", run);
+})();
+</script>
+</body>
+</html>

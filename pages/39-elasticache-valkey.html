@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ElastiCache: Redis vs Valkey · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="39">
+<main class="wrap">
+  <header class="page-head">
+    <h1>ElastiCache: Redis vs Valkey</h1>
+    <p class="lead">A cache can make a slow app fast by keeping frequently used data in memory. Here you'll learn how caching works, what Valkey is and why many teams are moving to it from Redis, how to create an ElastiCache Serverless cache for Valkey in a few clicks, and how to upgrade an existing Redis cache with no downtime.</p>
+  </header>
+
+  <h2>What is a cache?</h2>
+  <p>A <b>cache</b> is a small, very fast store that keeps copies of data you read often, so you don't have to fetch it from a slower place (usually a database) every time.</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A kitchen. The <b>database</b> is the supermarket: it has everything, but every trip takes time. The <b>cache</b> is your fridge: it's small, but grabbing milk takes a second. You keep what you use most in the fridge and restock it when it runs out.</div>
+  <p>Caches like Valkey and Redis are <b>in-memory key-value stores</b>:</p>
+  <ul>
+    <li><b>In-memory:</b> data is kept in RAM, not on disk, so reads take well under a millisecond inside AWS.</li>
+    <li><b>Key-value:</b> you store and fetch data by a name (the key), like <code>product:42</code> → <code>{"name":"Shoes","price":59}</code>.</li>
+  </ul>
+
+  <h3>Cache hit, cache miss, and TTL</h3>
+  <p>The most common pattern is called <b>cache-aside</b> (or "lazy loading"):</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 270" role="img" aria-label="Cache-aside pattern: the app asks the cache first; on a hit it returns quickly; on a miss it reads the database, stores the result in the cache with a TTL, then returns">
+      <defs><marker id="arr39" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="20" y="95" width="150" height="80" rx="10"/>
+      <text class="s-text-w" x="95" y="130" text-anchor="middle">Your app</text>
+      <text class="s-text-w" x="95" y="152" text-anchor="middle">(EC2, Lambda…)</text>
+      <rect class="s-orange-soft" x="440" y="20" width="220" height="80" rx="10"/>
+      <text class="s-text-b" x="550" y="54" text-anchor="middle">Cache (Valkey)</text>
+      <text class="s-text-s" x="550" y="76" text-anchor="middle">in memory · ~1 ms</text>
+      <rect class="s-blue" x="440" y="170" width="220" height="80" rx="10"/>
+      <text class="s-text-b" x="550" y="204" text-anchor="middle">Database</text>
+      <text class="s-text-s" x="550" y="226" text-anchor="middle">on disk · tens of ms</text>
+      <path class="s-line" d="M170 110 L438 50" marker-end="url(#arr39)"/>
+      <text class="s-text" x="300" y="62" text-anchor="middle">1. GET product:42</text>
+      <path class="s-line" d="M438 74 L172 130" marker-end="url(#arr39)" style="stroke:var(--green)"/>
+      <text class="s-text-b" x="320" y="122" text-anchor="middle" style="fill:var(--green)">HIT → return</text>
+      <path class="s-line" d="M172 160 L438 200" marker-end="url(#arr39)" style="stroke:var(--red)"/>
+      <text class="s-text" x="290" y="210" text-anchor="middle" style="fill:var(--red)">MISS → 2. query DB</text>
+      <path class="s-line-o" d="M640 170 V102" marker-end="url(#arr39)"/>
+      <text class="s-text-s" x="634" y="140" text-anchor="end">3. SET with TTL</text>
+    </svg>
+    <figcaption>Cache-aside: check the cache first. On a miss, read the database and save the answer in the cache for next time.</figcaption>
+  </figure>
+  <ul>
+    <li><b>Cache hit:</b> the key is in the cache, so the answer comes back fast.</li>
+    <li><b>Cache miss:</b> the key isn't there. The app reads the database (slow) and then stores the result in the cache.</li>
+    <li><b>TTL (time to live):</b> how long a cached item stays before it expires. A short TTL keeps data fresher. A long TTL gives more hits.</li>
+    <li>When memory fills up, the cache <b>evicts</b> (removes) items, usually the least recently used ones.</li>
+  </ul>
+
+  <div class="demo" id="demo-cache">
+    <div class="demo-head">Try it: cold vs warm cache</div>
+    <div class="demo-body">
+      <p>Request products and watch the latency. The first request for each product is a <b>miss</b> (cold cache). Repeat requests are <b>hits</b> until the TTL runs out. Times are simulated.</p>
+      <div class="row" id="c-prods"></div>
+      <label for="c-ttl" style="display:block;margin-top:12px;font-weight:600">TTL: <span id="c-ttlv">15</span> seconds</label>
+      <input type="range" id="c-ttl" min="5" max="60" step="5" value="15">
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="c-burst">Send 20 random requests</button>
+        <button class="btn" id="c-flush">Flush cache (cold start)</button>
+      </div>
+      <div id="c-keys" style="margin-top:10px;font:13px var(--mono);color:var(--text-2)"></div>
+      <div id="c-log" style="margin-top:10px"></div>
+      <div class="output" id="c-out">No requests yet.</div>
+    </div>
+  </div>
+
+  <p>Caches aren't only for speeding up database reads. The same engines are also used for <b>session storage</b> (who's logged in), <b>message queues</b> and pub/sub, leaderboards and counters, and sometimes as a <b>primary database</b> for fast, simple data.</p>
+
+  <h2>Redis vs Valkey: what happened?</h2>
+  <p><b>Redis</b> has been the most popular in-memory key-value store for years. Then its license changed:</p>
+  <ol class="steps">
+    <li><b>2024:</b> Redis moved from the permissive open-source BSD license to "source-available" licenses. These are not open source in the traditional sense, and they restrict how cloud providers can offer it.</li>
+    <li><b>Valkey</b> was created as a <b>fork</b> (a copy that continues separately) of the last open-source Redis version. It is backed by the <b>Linux Foundation</b> and keeps the permissive <b>BSD</b> license.</li>
+    <li><b>2025:</b> Redis added another license option, <b>AGPL</b>, an open-source license with strong "share your changes" rules.</li>
+  </ol>
+  <p>Two license changes in a short time created uncertainty. Companies don't want licensing surprises in their cache, queue or database layer. That is a big reason many have moved to Valkey.</p>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Redis</th><th>Valkey</th></tr></thead>
+    <tbody>
+      <tr><td>License</td><td>Changed twice recently (source-available, then also AGPL)</td><td>BSD: very permissive, staying open source under the Linux Foundation</td></tr>
+      <tr><td>Community</td><td>Run by Redis Ltd.</td><td>Fast-growing open community with many contributors</td></tr>
+      <tr><td>Compatibility</td><td>The original</td><td>Compatible with Redis commands and APIs (from the fork point), so existing clients and code keep working</td></tr>
+      <tr><td>Performance</td><td>Fast</td><td>Valkey 8 added better multi-threaded I/O. Benchmarks often show higher throughput</td></tr>
+      <tr><td>On ElastiCache</td><td>"Redis OSS" engine</td><td>"Valkey" engine: AWS's recommended choice and lower priced</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Amazon ElastiCache</h2>
+  <p><b>ElastiCache</b> is AWS's managed caching service. AWS runs the servers, patching, failover and backups for you. It supports three engines: <b>Valkey</b>, <b>Redis OSS</b> and <b>Memcached</b> (a simpler cache without the extra data types). You can run it two ways:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Serverless</h3><p>No servers or node sizes to choose. It scales automatically and you pay for data stored and requests made. AWS handles infrastructure and maintenance with no downtime. For Valkey it's priced about <b>33% lower</b> than the other engines.</p></div>
+    <div class="card"><h3>Node-based (self-designed)</h3><p>You pick node types, the number of shards and replicas. This gives more control and predictable capacity. Valkey nodes are about <b>20% lower</b> in price than the other engines.</p></div>
+  </div>
+
+  <h3>Create a serverless Valkey cache</h3>
+  <ol class="steps">
+    <li>Console → <b>ElastiCache</b> → <b>Get started</b> → choose <b>Valkey</b> (the recommended option).</li>
+    <li>Choose <b>Serverless</b> → <b>New cache</b>. Give it a name and description, e.g. <code>valkey-demo</code>.</li>
+    <li><b>Engine version:</b> pick the latest major version (8 at the time of writing).</li>
+    <li>Review the defaults: encryption in transit and at rest, the <a href="06-vpc.html">VPC</a>/subnets, and the <a href="07-security-groups-nacl.html">security groups</a> (they must allow your app on port 6379). Click <b>Create</b>.</li>
+    <li>Wait 2–3 minutes for status <b>Available</b>. Copy the <b>endpoint</b>.</li>
+  </ol>
+
+  <h3>Connect and try it</h3>
+  <p>The cache lives <b>inside your VPC</b>, so you connect from something in that VPC. The easiest way is the cache's <b>Connectivity and security</b> section → <b>Connect to cache</b>. It opens <b>AWS CloudShell</b> (a browser terminal) with the <code>valkey-cli</code> ready. Copy the command it shows. Serverless caches require TLS:</p>
+<pre><code>valkey-cli -h valkey-demo-xxxxxx.serverless.use1.cache.amazonaws.com -p 6379 --tls
+
+&gt; PING
+PONG
+&gt; SET xkey "hello elasticache"
+OK
+&gt; GET xkey
+"hello elasticache"
+&gt; SET session:abc "user42" EX 60     # expires after 60 seconds (TTL)
+OK</code></pre>
+  <p>From application code, use a client library. <b>Valkey GLIDE</b> is the recommended official client (Python, Java, Node.js and more), and existing Redis client libraries also work.</p>
+
+  <h2>Benchmarking Redis OSS vs Valkey</h2>
+  <p>To compare the two fairly, run the same test against a Redis OSS serverless cache and a Valkey serverless cache. The test script ran about <b>10,000 SET, GET and DELETE</b> operations from an EC2 instance in the same VPC, changing only the endpoint between runs. It measured:</p>
+  <ul>
+    <li><b>Throughput:</b> operations per second. Higher is better.</li>
+    <li><b>p50 latency:</b> half of all requests were faster than this (the "typical" request).</li>
+    <li><b>p90 / p99 latency:</b> 90% / 99% of requests were faster than this. p99 shows the slow "tail" that your unluckiest users feel, which is why benchmarks focus on it.</li>
+  </ul>
+  <p>In that test (repeated over many runs), Valkey had higher SET/GET/DELETE throughput and a better p99 latency. Treat this as one example: always benchmark with <em>your</em> workload before deciding.</p>
+
+  <h2>Upgrading Redis OSS → Valkey with zero downtime</h2>
+  <p>Already have an ElastiCache Redis OSS cache? You don't need to rebuild it:</p>
+  <ol class="steps">
+    <li>Open the cache in the ElastiCache console and click <b>Upgrade to Valkey</b>.</li>
+    <li>Pick the Valkey engine version (e.g. 8) and confirm.</li>
+    <li>The cache keeps serving traffic during the upgrade. When the status returns to <b>Available</b>, it's running Valkey.</li>
+  </ol>
+  <p>Because Valkey is API-compatible with Redis, your app keeps using the <b>same endpoint, commands and client code</b>.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>Delete test caches when you're done. Serverless caches charge for stored data and requests, so a forgotten one will show up on your bill (<a href="36-reduce-aws-bill.html">Lesson 36</a>).</div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Your product page is slow and the database CPU is high. What do you do?" Put a cache (ElastiCache) in front of the database using cache-aside with a sensible TTL, and watch the hit ratio and p99 latency. Mention the trade-off: cached data can be slightly stale.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">The first request for <code>product:7</code> takes 90 ms, and the second takes 1 ms. Why?</div>
+    <div class="opts"><button>The database got faster</button><button>The first was a cache miss (read from the DB, then cached); the second was a cache hit</button><button>The TTL expired between them</button></div>
+    <div class="explain">Cache-aside: miss → read DB → store in cache. The next read is served from memory.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">What's the main reason companies are moving from Redis to Valkey?</div>
+    <div class="opts"><button>Valkey uses a completely different API</button><button>Redis can't run on AWS anymore</button><button>Redis's license changes created uncertainty, while Valkey stays permissively open source (BSD) under the Linux Foundation</button></div>
+    <div class="explain">Licensing stability is the main driver. A growing community and good performance help too. Valkey stays Redis-compatible.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You upgrade an ElastiCache Redis OSS cache to Valkey. What must you change in your application?</div>
+    <div class="opts"><button>Usually nothing. Same endpoint, commands and clients</button><button>Rewrite all commands in the Valkey language</button><button>Move the app to a new VPC</button></div>
+    <div class="explain">The in-place upgrade keeps the endpoint, and Valkey is API-compatible with Redis.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A <b>cache</b> keeps hot data in memory. <b>Hits</b> are fast. <b>Misses</b> go to the database and then fill the cache. <b>TTL</b> controls how long data stays.</li>
+      <li><b>Valkey</b> is an open-source (BSD), Linux Foundation fork of Redis. It's Redis-compatible and growing fast. Redis's license changes pushed many teams toward it.</li>
+      <li><b>ElastiCache</b> offers Valkey, Redis OSS and Memcached, either <b>serverless</b> (no capacity planning) or node-based. Valkey is the recommended and cheaper engine.</li>
+      <li>Connect from inside the VPC (e.g. CloudShell via "Connect to cache") using <code>valkey-cli --tls</code>. In code, use Valkey GLIDE or a Redis client.</li>
+      <li>Compare with <b>throughput</b> and <b>p50/p90/p99 latency</b>. Upgrading Redis OSS → Valkey is a one-click, zero-downtime change.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var cache = {}; // key -> expiry timestamp (ms)
+  var stats = { n: 0, hit: 0, total: 0 };
+  var log = [];
+  var ticker = null;
+
+  function ttl() { return +$("c-ttl").value; }
+  function alive(k) { return cache[k] && cache[k] > Date.now(); }
+
+  function request(id) {
+    var key = "product:" + id, ms, hit;
+    if (alive(key)) { hit = true; ms = 0.6 + Math.random() * 0.8; }
+    else { hit = false; ms = 60 + Math.random() * 60; cache[key] = Date.now() + ttl() * 1000; }
+    stats.n++; stats.total += ms; if (hit) stats.hit++;
+    log.unshift({ key: key, ms: ms, hit: hit });
+    if (log.length > 6) log.pop();
+  }
+
+  function renderKeys() {
+    var now = Date.now(), parts = [];
+    Object.keys(cache).sort().forEach(function (k) {
+      if (cache[k] > now) parts.push(k + " (" + Math.ceil((cache[k] - now) / 1000) + "s)");
+      else delete cache[k];
+    });
+    $("c-keys").textContent = "In cache: " + (parts.length ? parts.join(" · ") : "(empty)");
+    if (!parts.length && ticker) { clearInterval(ticker); ticker = null; }
+  }
+
+  function render() {
+    renderKeys();
+    if (!ticker && Object.keys(cache).length) ticker = setInterval(renderKeys, 1000);
+    var max = 120, html = "";
+    log.forEach(function (r) {
+      var w = Math.max(2, r.ms / max * 100);
+      html += '<div style="display:flex;align-items:center;gap:8px;font-size:13px;margin:3px 0">' +
+        '<span style="width:84px;flex:none;font-family:var(--mono)">' + r.key + '</span>' +
+        '<span style="flex:1;background:var(--surface-2);border-radius:4px;height:14px;overflow:hidden">' +
+        '<span style="display:block;height:100%;width:' + w + '%;background:' + (r.hit ? "var(--green)" : "var(--red)") + '"></span></span>' +
+        '<span style="width:92px;flex:none;text-align:right;font-weight:700;color:' + (r.hit ? "var(--green)" : "var(--red)") + '">' +
+        (r.hit ? "HIT " : "MISS ") + r.ms.toFixed(r.hit ? 1 : 0) + " ms</span></div>";
+    });
+    $("c-log").innerHTML = html;
+    if (!stats.n) { $("c-out").textContent = "No requests yet."; $("c-out").className = "output"; return; }
+    var ratio = stats.hit / stats.n * 100;
+    $("c-out").innerHTML = "<b>Requests:</b> " + stats.n + " · <b>Hits:</b> " + stats.hit + " · <b>Misses:</b> " + (stats.n - stats.hit) +
+      "<br><b>Hit ratio:</b> " + ratio.toFixed(0) + "% · <b>Average latency:</b> " + (stats.total / stats.n).toFixed(1) + " ms" +
+      (ratio >= 60 ? "<br>Warm cache: most requests skip the database." : "<br>Cold cache: most requests still go to the database.");
+    $("c-out").className = "output " + (ratio >= 60 ? "ok" : "");
+  }
+
+  for (var i = 1; i <= 5; i++) (function (id) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = "GET product:" + id;
+    b.addEventListener("click", function () { request(id); render(); });
+    $("c-prods").appendChild(b);
+  })(i);
+
+  $("c-burst").addEventListener("click", function () {
+    for (var k = 0; k < 20; k++) request(1 + Math.floor(Math.random() * 5));
+    render();
+  });
+  $("c-flush").addEventListener("click", function () {
+    cache = {}; stats = { n: 0, hit: 0, total: 0 }; log = []; render();
+  });
+  $("c-ttl").addEventListener("input", function () { $("c-ttlv").textContent = ttl(); });
+  render();
+})();
+</script>
+</body>
+</html>

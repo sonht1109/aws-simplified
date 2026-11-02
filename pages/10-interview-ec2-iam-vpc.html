@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scenario Questions: EC2, IAM, VPC · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="10">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Scenario Questions: EC2, IAM, VPC</h1>
+    <p class="lead">Interviewers today rarely ask "What is EC2?" — they describe a situation and ask how you'd handle it. Here are 10 scenario questions on everything so far, with model answers and links back to the lessons that explain each idea.</p>
+  </header>
+
+  <h2>How to answer scenario questions</h2>
+  <ol class="steps">
+    <li><strong>Break the question into parts.</strong> "Highly available <em>and</em> scalable two-tier app" is really three questions.</li>
+    <li><strong>Name the AWS building block for each part</strong> (AZs for availability, Auto Scaling for scale, subnets for layout…).</li>
+    <li><strong>Say why</strong>, in one sentence each. Mention security when it fits.</li>
+    <li>If several answers work, give them, then say which is <strong>simplest or best</strong> and why.</li>
+  </ol>
+  <div class="callout tip"><span class="callout-title">Tip</span>Try to answer each question out loud <em>before</em> opening it. Use the buttons below to open or close all answers at once.</div>
+  <div class="row"><button class="btn" id="open-all">Show all answers</button><button class="btn" id="close-all">Hide all answers</button></div>
+
+  <h2>Networking and VPC</h2>
+
+  <details>
+    <summary>1. Design a VPC for a two-tier application that must be highly available and scalable.</summary>
+    <div>
+      <p>Split it into its parts:</p>
+      <ul>
+        <li><strong>Layout:</strong> a <strong>public subnet</strong> holding an internet-facing <strong>load balancer</strong>, and a <strong>private subnet</strong> holding the application servers. The load balancer must be reachable from the internet, otherwise nobody can reach the app.</li>
+        <li><strong>High availability:</strong> repeat the public and private subnets in <strong>at least two Availability Zones</strong>, so if one AZ goes down the other keeps serving.</li>
+        <li><strong>Scalability:</strong> run the app servers in an <strong>Auto Scaling Group</strong> that adds instances when load rises.</li>
+      </ul>
+      <p>This is exactly the build in <a href="09-vpc-production-project.html">Lesson 9</a>. (Adding a database tier makes it <a href="32-three-tier-architecture.html">three-tier</a>.)</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. Your VPC has several subnets. Block outbound internet access for one subnet but keep it for another.</summary>
+    <div>
+      <p>You could tighten outbound security group rules on every instance, but the cleanest answer is <strong>routing</strong>:</p>
+      <ul>
+        <li>Find the <strong>route table</strong> associated with the subnet you want to restrict.</li>
+        <li><strong>Remove the default route</strong> <code>0.0.0.0/0</code> that points to the internet gateway (or NAT gateway).</li>
+        <li>With no route out, nothing in that subnet can reach the internet. The other subnet keeps its own route table and stays connected.</li>
+      </ul>
+      <p>Route tables: <a href="06-vpc.html">Lesson 6</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. Instances in a private subnet need internet access for software updates. How?</summary>
+    <div>
+      <ul>
+        <li>Put a <strong>NAT gateway</strong> (or an older-style NAT instance) in a <strong>public subnet</strong>.</li>
+        <li>In the private subnet's route table, send <code>0.0.0.0/0</code> to the NAT gateway.</li>
+        <li>Bonus point: NAT (network address translation) <strong>replaces the instance's private IP with the NAT gateway's public IP</strong>, so outside sites never learn your server's address, and nobody outside can start a connection back in.</li>
+      </ul>
+      <p>NAT gateway: <a href="06-vpc.html">Lesson 6</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. Two EC2 instances, "foo" and "bar", must talk to each other using private IPs. What do you need?</summary>
+    <div>
+      <p>Sometimes scenarios are simple:</p>
+      <ul>
+        <li>Put them in the <strong>same VPC</strong>. Every route table has a built-in <code>local</code> route, so subnets in one VPC can reach each other — same subnet or different subnets.</li>
+        <li>Make sure their <strong>security groups</strong> (and NACLs, if customised) allow the port they use. A neat trick: allow traffic whose source is the other instance's security group.</li>
+        <li>If they are in <strong>different VPCs</strong>, connect the VPCs with <strong>VPC peering</strong> and add routes in both route tables pointing to the peering connection.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. You must enforce strict network access control for your VPC. How?</summary>
+    <div>
+      <ul>
+        <li>Use <strong>network ACLs</strong> at the <strong>subnet</strong> level for broad, fine-grained rules: allow only specific IP ranges and ports, and explicitly <strong>deny</strong> bad ones. They apply to every instance in the subnet.</li>
+        <li>Use <strong>security groups</strong> at the <strong>instance</strong> level to open only the ports each app needs.</li>
+        <li>Using both is <strong>defense in depth</strong>.</li>
+      </ul>
+      <p>Details and a simulator: <a href="07-security-groups-nacl.html">Lesson 7</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>6. Your organisation needs an isolated environment inside the VPC for sensitive workloads. How do you set it up?</summary>
+    <div>
+      <p>This checks that you understand subnets as a unit of isolation:</p>
+      <ul>
+        <li>Create a <strong>dedicated private subnet</strong> — a slice of the VPC's range (e.g. a few thousand of its 65,536 addresses).</li>
+        <li>Give it a route table with <strong>no route to an internet gateway or NAT gateway</strong> — only the local route.</li>
+        <li>Lock it down further with a strict NACL and security groups, and limit who can reach it (not even via the general bastion if not needed).</li>
+      </ul>
+    </div>
+  </details>
+
+  <details>
+    <summary>7. An application in your VPC needs to reach AWS services like S3 privately and securely. How?</summary>
+    <div>
+      <ul>
+        <li>Use a <strong>VPC endpoint</strong>. It lets resources in your VPC reach services such as S3 or DynamoDB over AWS's private network, without going through an internet gateway or NAT gateway.</li>
+        <li>For S3 and DynamoDB there is a free <strong>gateway endpoint</strong>; you add it to the subnet's route table. (It's the "S3 gateway" option you see in <em>VPC and more</em>.)</li>
+        <li>Combine it with an <strong>IAM role</strong> on the instance so the app has permission to use the bucket.</li>
+      </ul>
+      <p>S3 itself: <a href="11-s3.html">Lesson 11</a>.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>8. What's the difference between a security group and a NACL?</summary>
+    <div>
+      <div class="table-wrap"><table>
+        <tr><th></th><th>Security group</th><th>NACL</th></tr>
+        <tr><td>Level</td><td>Instance</td><td>Subnet</td></tr>
+        <tr><td>Rules</td><td>Allow only</td><td>Allow and deny, numbered order</td></tr>
+        <tr><td>State</td><td><strong>Stateful</strong> — replies allowed automatically</td><td><strong>Stateless</strong> — replies need their own rule</td></tr>
+      </table></div>
+      <p>Example of "stateful": your app calls google.com. With a security group, the response comes back in without any inbound rule because the group remembers the outgoing request. A NACL doesn't remember, so you must allow both directions.</p>
+      <p>Good practice: use both. More in <a href="07-security-groups-nacl.html">Lesson 7</a>.</p>
+    </div>
+  </details>
+
+  <h2>IAM</h2>
+
+  <details>
+    <summary>9. Explain IAM users, groups, roles and policies.</summary>
+    <div>
+      <ul>
+        <li><strong>User</strong> — an identity for a person (or tool) who needs to log in. Handles <em>authentication</em>: who are you?</li>
+        <li><strong>Policy</strong> — a JSON document listing permissions (e.g. read S3, manage EC2). Handles <em>authorization</em>: what may you do? A user without policies can sign in but do nothing.</li>
+        <li><strong>Group</strong> — a set of users sharing policies. If 500 developers all need EKS access, update the <em>developers</em> group once instead of 500 users.</li>
+        <li><strong>Role</strong> — permissions that a <em>service</em> (or person, temporarily) can assume. Example: attach a role to an EC2 instance so the Python app on it can read a database or S3 bucket — no stored passwords.</li>
+      </ul>
+      <p>Full explanation: <a href="03-iam.html">Lesson 3</a>.</p>
+    </div>
+  </details>
+
+  <h2>Access to private servers</h2>
+
+  <details>
+    <summary>10. Instances in a private subnet must have no direct internet access, but admins still need to log in. How do you set this up?</summary>
+    <div>
+      <ul>
+        <li>Launch a <strong>bastion host</strong> (jump server) in a <strong>public subnet</strong> of the same VPC.</li>
+        <li>Admins SSH to the bastion, then from it to the private instances' private IPs. Use <strong>SSH</strong> for Linux and <strong>RDP</strong> for Windows.</li>
+        <li>Allow SSH on the bastion only from trusted IPs, and on private instances only from the bastion's security group.</li>
+        <li>Why it's secure: there is <strong>one door</strong> to guard, and you can <strong>log and audit</strong> every login and command there.</li>
+      </ul>
+      <p>Hands-on: <a href="09-vpc-production-project.html">Lesson 9</a>.</p>
+    </div>
+  </details>
+
+  <h2>Cheat sheet: three kinds of subnet</h2>
+  <p>Several answers above come down to the subnet's route table. Keep this in your head:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Subnet</th><th>Default route (<code>0.0.0.0/0</code>)</th><th>Used for</th></tr>
+    <tr><td>Public</td><td>→ internet gateway</td><td>Load balancers, NAT gateways, bastion</td></tr>
+    <tr><td>Private</td><td>→ NAT gateway</td><td>App servers that need updates</td></tr>
+    <tr><td>Isolated</td><td>none (local only)</td><td>Sensitive workloads, databases</td></tr>
+  </table></div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">The quickest way to stop one subnet from reaching the internet, without touching each instance, is to…</div>
+    <div class="opts"><button>Delete the internet gateway</button><button>Remove every instance's public IP</button><button>Remove the 0.0.0.0/0 route from that subnet's route table</button></div>
+    <div class="explain">Deleting the IGW would cut off every subnet. Editing that one subnet's route table affects only it.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">An app on EC2 needs to read from S3. What's the right way to give it permission?</div>
+    <div class="opts"><button>Attach an IAM role to the instance</button><button>Create an IAM user and save its keys on the server</button><button>Open port 443 in the security group</button></div>
+    <div class="explain">Roles give services temporary credentials without storing secrets on the machine.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">Which pair gives a two-tier app high availability and scalability?</div>
+    <div class="opts"><button>Bigger instance type + Elastic IP</button><button>Multiple Availability Zones + Auto Scaling Group</button><button>NAT gateway + VPC peering</button></div>
+    <div class="explain">AZs keep the app up if one location fails; an Auto Scaling Group adds servers as load grows.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Break scenario questions into parts and map each to a building block.</li>
+      <li><strong>Availability → multiple AZs. Scalability → Auto Scaling Groups.</strong></li>
+      <li>Most subnet questions are answered by the <strong>route table</strong>: IGW, NAT, or nothing.</li>
+      <li>Security: NACLs at the subnet, security groups at the instance — stateless vs stateful.</li>
+      <li>Give apps permissions with <strong>IAM roles</strong>; reach private servers through a <strong>bastion host</strong>.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  function setAll(open) {
+    Array.prototype.forEach.call(document.querySelectorAll("main details"), function (d) { d.open = open; });
+  }
+  document.getElementById("open-all").addEventListener("click", function () { setAll(true); });
+  document.getElementById("close-all").addEventListener("click", function () { setAll(false); });
+})();
+</script>
+</body>
+</html>

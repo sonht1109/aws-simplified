@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load Balancers: ALB vs NLB vs GWLB · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="28">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Load Balancers: ALB vs NLB vs GWLB</h1>
+    <p class="lead">A load balancer spreads incoming traffic across several servers so no single server gets overwhelmed. AWS has three modern types. Picking the right one depends on which network "layer" it works at, so we'll cover just enough of the OSI model first, then compare ALB, NLB and GWLB with real use cases.</p>
+  </header>
+
+  <h2>Why you need a load balancer</h2>
+  <p>Say you build a game and run it on one EC2 instance. Five players, no problem. The game goes viral and now hundreds of people play at once. One server can't keep up: some players see <b>slowness</b>, others see <b>downtime</b>. Either way, it's a bad experience.</p>
+  <p>The fix: run the game on several identical instances and put a <b>load balancer</b> in front. Users connect to the load balancer, never to a server directly, and it decides which server handles each request.</p>
+  <ul>
+    <li><b>Spreads the load:</b> 100 requests across 3 servers ≈ 33 each.</li>
+    <li><b>Scales out:</b> still too slow? Add more instances behind it, for example with an Auto Scaling Group (<a href="09-vpc-production-project.html">Lesson 9</a>).</li>
+    <li><b>Keeps the app up:</b> it checks each server's health and stops sending traffic to broken ones. This is what makes an app <b>highly available</b>.</li>
+  </ul>
+
+  <h3>Load-balancing algorithms</h3>
+  <p>An <b>algorithm</b> here just means the rule for choosing a server:</p>
+  <ul>
+    <li><b>Round robin:</b> take turns, 1 → 2 → 3 → 1… The simplest option, good when all servers are identical (same CPU, RAM, OS).</li>
+    <li><b>Weighted / ratio-based:</b> a bigger server gets a bigger share, e.g. 50% to the powerful one and 25% each to the other two.</li>
+    <li><b>Least outstanding requests:</b> send the next request to the server that is least busy right now (an ALB option).</li>
+  </ul>
+  <p>Load balancers aren't unique to AWS. NGINX, F5, Envoy, Traefik and Ambassador are popular ones, each with its own set of algorithms.</p>
+
+  <div class="demo" id="demo-rr">
+    <div class="demo-head">Try it: watch requests get distributed</div>
+    <div class="demo-body">
+      <p>Pick an algorithm and send traffic. Mark a server unhealthy to see the health check take it out of rotation.</p>
+      <div class="row">
+        <label for="rr-algo">Algorithm</label>
+        <select id="rr-algo"><option value="rr">Round robin</option><option value="w">Weighted (2 : 1 : 1)</option></select>
+      </div>
+      <div id="rr-servers" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0"></div>
+      <div class="row">
+        <button class="btn primary" id="rr-one">Send 1 request</button>
+        <button class="btn" id="rr-many">Send 12</button>
+        <button class="btn" id="rr-reset">Reset</button>
+      </div>
+      <div class="output" id="rr-out">No requests yet.</div>
+    </div>
+  </div>
+
+  <h2>Just enough OSI model</h2>
+  <p>When you open <code>linkedin.com/in/someone</code> in a browser, the request passes through seven <b>layers</b> on its way to the server. Each layer adds one job. You only need a rough idea of each, because <b>different load balancers work at different layers</b>.</p>
+  <div class="table-wrap"><table>
+    <tr><th>#</th><th>Layer</th><th>What happens there (simplified)</th></tr>
+    <tr><td>7</td><td><b>Application</b></td><td>The protocol you speak: HTTP, FTP… Your browser builds the HTTP request for you. <b>ALB works here.</b></td></tr>
+    <tr><td>6</td><td>Presentation</td><td>Encoding and encryption, e.g. TLS (the successor to SSL) for HTTPS.</td></tr>
+    <tr><td>5</td><td>Session</td><td>Opens and tracks the session between client and server.</td></tr>
+    <tr><td>4</td><td><b>Transport</b></td><td>Splits data into small segments and delivers them reliably (TCP) or quickly (UDP), using ports. <b>NLB works here.</b></td></tr>
+    <tr><td>3</td><td><b>Network</b></td><td>IP addresses; packets hop across routers toward the destination. <b>GWLB works here.</b></td></tr>
+    <tr><td>2</td><td>Data link</td><td>Switches move frames inside the local network or data centre.</td></tr>
+    <tr><td>1</td><td>Physical</td><td>Cables and signals that finally reach the server.</td></tr>
+  </table></div>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A Layer 7 balancer is a receptionist who opens your letter, reads it, and walks it to the right department. A Layer 4 balancer is a mail sorter who only reads the address and port on the envelope, which makes it much faster, but it can't route by what's inside.</div>
+
+  <h2>Application Load Balancer (ALB): Layer 7</h2>
+  <p>The ALB reads each HTTP(S) request: the <b>path</b>, the <b>host name</b>, the <b>headers</b>, query strings. Then it decides where to send it. That allows <b>content-based routing</b>:</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 260" role="img" aria-label="An application load balancer receives requests for shop.com and routes /payments to the payments target group, /login to the login target group and everything else to the web target group">
+      <defs><marker id="arr28" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="16" y="104" width="120" height="50" rx="8"/>
+      <text class="s-text-w" x="76" y="134" text-anchor="middle">Users</text>
+      <path class="s-line" d="M136 129 H190" marker-end="url(#arr28)"/>
+      <rect class="s-orange" x="194" y="84" width="170" height="90" rx="8"/>
+      <text class="s-text-ink" x="279" y="112" text-anchor="middle">ALB</text>
+      <text class="s-text-ink" x="279" y="134" text-anchor="middle" style="font-weight:400">listener HTTPS :443</text>
+      <text class="s-text-ink" x="279" y="156" text-anchor="middle" style="font-weight:400">reads path / host</text>
+      <path class="s-line-o" d="M364 110 L470 44" marker-end="url(#arr28)"/>
+      <path class="s-line-o" d="M364 129 H470" marker-end="url(#arr28)"/>
+      <path class="s-line-o" d="M364 148 L470 214" marker-end="url(#arr28)"/>
+      <text class="s-text-s" x="392" y="66">/payments</text>
+      <text class="s-text-s" x="404" y="122">/login</text>
+      <text class="s-text-s" x="300" y="200">/* (default)</text>
+      <rect class="s-green" x="474" y="18" width="210" height="52" rx="8"/>
+      <text class="s-text-b" x="579" y="40" text-anchor="middle">TG: payments</text>
+      <text class="s-text-s" x="579" y="58" text-anchor="middle">3 instances</text>
+      <rect class="s-blue" x="474" y="103" width="210" height="52" rx="8"/>
+      <text class="s-text-b" x="579" y="125" text-anchor="middle">TG: login</text>
+      <text class="s-text-s" x="579" y="143" text-anchor="middle">2 containers</text>
+      <rect class="s-purple" x="474" y="188" width="210" height="52" rx="8"/>
+      <text class="s-text-b" x="579" y="210" text-anchor="middle">TG: web</text>
+      <text class="s-text-s" x="579" y="228" text-anchor="middle">4 instances</text>
+    </svg>
+    <figcaption>One ALB, one domain, many services: listener rules send each path to its own target group.</figcaption>
+  </figure>
+  <ul>
+    <li><b>Path-based:</b> <code>/payments</code> → payment service, <code>/login</code> → login service.</li>
+    <li><b>Host-based:</b> <code>shop.example.in</code> and <code>shop.example.com</code> go to different servers.</li>
+    <li><b>Header/query-based</b> and <b>weighted</b> routing, e.g. send 10% of traffic to a new version.</li>
+    <li><b>TLS termination (SSL offloading):</b> the ALB decrypts HTTPS so your servers don't have to; it can also re-encrypt toward the servers.</li>
+    <li>Built for websites, APIs and microservices. It's also what Kubernetes ingress uses on EKS (<a href="24-eks.html">Lesson 24</a>).</li>
+  </ul>
+  <p><b>Trade-off:</b> reading every request costs time and money. The ALB adds a little latency (an extra "hop" that inspects the request) and costs more per unit of traffic than an NLB.</p>
+
+  <h2>Network Load Balancer (NLB): Layer 4</h2>
+  <p>The NLB doesn't look inside the request. It forwards <b>TCP and UDP</b> traffic based on IP address and port, which makes it very fast:</p>
+  <ul>
+    <li><b>Ultra-low latency</b> and huge throughput (millions of requests per second).</li>
+    <li>Handles non-HTTP protocols: game servers, video streaming, IoT, databases, any custom TCP/UDP protocol.</li>
+    <li>Can have a <b>static IP</b> per Availability Zone, which helps when clients or firewalls need to allow-list fixed IPs.</li>
+    <li>A TCP connection stays on the same target for as long as it lasts, which suits long streams. NLB can also pin a client to one target by source IP (stickiness).</li>
+    <li>Cheaper than an ALB for the same volume of traffic.</li>
+  </ul>
+  <p>Typical users: online games and live/video streaming platforms, where even a small delay is not acceptable and HTTP-level routing isn't needed.</p>
+
+  <div class="callout warn"><span class="callout-title">Clearing up a common myth</span>You'll sometimes hear "only NLB has sticky sessions". Not quite: an <b>ALB supports sticky sessions too</b>, using cookies, so a user's requests keep going to the same target. The real difference is the layer: ALB sticks at HTTP level with a cookie; NLB keeps each TCP connection on one target and can stick by client IP.</div>
+
+  <h2>Gateway Load Balancer (GWLB): Layer 3</h2>
+  <p>GWLB is a different tool for a different job. It sits in front of <b>virtual appliances</b>: third-party firewalls, intrusion detection/prevention systems (IDS/IPS) and deep packet inspection tools, usually running on EC2.</p>
+  <ul>
+    <li>It works at <b>Layer 3 (IP packets)</b> and is <b>transparent</b>: it passes the original packets unchanged to the appliance fleet, wrapped in a tunnel (the GENEVE protocol), and gets them back after inspection.</li>
+    <li>It spreads load across the appliances and scales them, while keeping each traffic flow on the same appliance.</li>
+    <li>ALB and NLB aren't designed for this. They terminate or forward connections to an application rather than passing every packet through a security appliance and back.</li>
+  </ul>
+  <p>Typical users: companies that build or run firewall/VPN-style security appliances, or that must route all traffic through a central inspection layer.</p>
+
+  <div class="callout"><span class="callout-title">Note</span>There's also the <b>Classic Load Balancer</b>, the older previous-generation option. New designs use ALB, NLB or GWLB.</div>
+
+  <h2>The pieces of every AWS load balancer</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Listener</h3><p>A port and protocol the load balancer listens on (e.g. HTTPS :443), plus <b>rules</b> saying what to do with matching traffic: forward, redirect (HTTP→HTTPS) or return a fixed response.</p></div>
+    <div class="card"><h3>Target group</h3><p>The set of destinations: EC2 instances, IP addresses, Lambda functions (ALB) or containers. Each group has its own port and protocol.</p></div>
+    <div class="card"><h3>Health check</h3><p>The load balancer regularly calls each target (e.g. <code>GET /</code>). Targets that fail are marked unhealthy and get no traffic until they recover.</p></div>
+    <div class="card"><h3>Subnets / AZs</h3><p>You enable the load balancer in subnets in two or more Availability Zones, so losing one AZ doesn't take the app down.</p></div>
+  </div>
+  <div class="xref-box"><div>Want to see these pieces in code? <a href="26-terraform.html">Lesson 26</a> creates an ALB, target group, attachments and listener with Terraform.</div></div>
+
+  <h2>Side-by-side</h2>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>ALB</th><th>NLB</th><th>GWLB</th></tr>
+    <tr><td>OSI layer</td><td>7 (application)</td><td>4 (transport)</td><td>3 (network)</td></tr>
+    <tr><td>Traffic</td><td>HTTP, HTTPS, gRPC, WebSockets</td><td>TCP, UDP, TLS</td><td>All IP packets</td></tr>
+    <tr><td>Routing by</td><td>Path, host, headers, query, weights</td><td>IP + port</td><td>Flow, to appliances</td></tr>
+    <tr><td>Speed</td><td>Fast, slight extra latency</td><td>Fastest, ultra-low latency</td><td>Depends on appliances</td></tr>
+    <tr><td>Cost</td><td>Higher</td><td>Lower</td><td>Specialised</td></tr>
+    <tr><td>Use it for</td><td>Websites, APIs, microservices</td><td>Games, streaming, non-HTTP, static IPs</td><td>Firewalls, IDS/IPS, inspection</td></tr>
+  </table></div>
+
+  <div class="demo" id="demo-pick">
+    <div class="demo-head">Try it: which load balancer?</div>
+    <div class="demo-body">
+      <p>Pick the requirement that matters most.</p>
+      <div class="row" id="pick-btns"></div>
+      <div class="output" id="pick-out">Choose a requirement above.</div>
+    </div>
+  </div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>DevOps engineers and developers choose the load balancer together. A strong answer names the layer and gives the reason: "Our microservices sit behind one ALB with path-based rules because we route on URL; our real-time game servers use an NLB because they speak UDP and need low latency; traffic inspection goes through a GWLB in front of our firewall appliances."</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="0">
+    <div class="q">You need <code>/api/*</code> to go to one service and <code>/images/*</code> to another, under the same domain. Which load balancer?</div>
+    <div class="opts"><button>ALB</button><button>NLB</button><button>GWLB</button></div>
+    <div class="explain">Path-based routing requires reading the HTTP request, which is Layer 7, the ALB's job.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">A multiplayer game uses UDP and players hate lag. Which fits best?</div>
+    <div class="opts"><button>ALB</button><button>NLB</button><button>Classic Load Balancer</button></div>
+    <div class="explain">NLB works at Layer 4, supports UDP and adds very little latency.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">All traffic must pass through a fleet of third-party firewall appliances. Which load balancer is built for that?</div>
+    <div class="opts"><button>ALB</button><button>NLB</button><button>GWLB</button></div>
+    <div class="explain">Gateway Load Balancer transparently distributes packets to virtual appliances such as firewalls and IDS/IPS.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A load balancer spreads traffic across healthy targets so apps stay fast and available.</li>
+      <li>Round robin takes turns; weighted sends more to stronger servers; health checks remove broken ones.</li>
+      <li><b>ALB = Layer 7</b>: reads HTTP, routes by path/host/header, terminates TLS. Smart but slightly slower and pricier.</li>
+      <li><b>NLB = Layer 4</b>: TCP/UDP by IP and port, ultra-low latency, static IPs. For games, streaming and non-HTTP traffic.</li>
+      <li><b>GWLB = Layer 3</b>: transparently feeds traffic through firewalls and other security appliances.</li>
+      <li>Every load balancer is built from listeners, rules, target groups and health checks, spread across multiple AZs.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  /* --- distribution demo --- */
+  var servers = [
+    { name: "EC2-1", healthy: true, count: 0, weight: 2 },
+    { name: "EC2-2", healthy: true, count: 0, weight: 1 },
+    { name: "EC2-3", healthy: true, count: 0, weight: 1 }
+  ];
+  var box = document.getElementById("rr-servers");
+  var out = document.getElementById("rr-out");
+  var algo = document.getElementById("rr-algo");
+  var ptr = 0, total = 0, cards = [];
+
+  servers.forEach(function (s, i) {
+    var c = document.createElement("div");
+    c.style.cssText = "border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--surface);text-align:center;transition:background .2s;min-width:0";
+    var t = document.createElement("div"); t.style.fontWeight = "700"; t.style.fontSize = "14px"; t.textContent = s.name;
+    var n = document.createElement("div"); n.style.cssText = "font-size:22px;font-weight:700;margin:4px 0"; n.textContent = "0";
+    var bar = document.createElement("div"); bar.style.cssText = "height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden";
+    var fill = document.createElement("div"); fill.style.cssText = "height:100%;width:0;background:var(--orange);transition:width .2s"; bar.appendChild(fill);
+    var b = document.createElement("button"); b.className = "btn"; b.type = "button"; b.style.cssText = "margin-top:8px;font-size:12px;padding:4px 8px;width:100%";
+    b.addEventListener("click", function () { s.healthy = !s.healthy; paint(); });
+    c.appendChild(t); c.appendChild(n); c.appendChild(bar); c.appendChild(b);
+    box.appendChild(c);
+    cards.push({ el: c, n: n, fill: fill, btn: b });
+  });
+
+  function sequence() {
+    var seq = [];
+    servers.forEach(function (s, i) {
+      if (!s.healthy) return;
+      var w = algo.value === "w" ? s.weight : 1;
+      for (var k = 0; k < w; k++) seq.push(i);
+    });
+    return seq;
+  }
+  function paint(hit) {
+    servers.forEach(function (s, i) {
+      var c = cards[i];
+      c.n.textContent = s.count;
+      c.fill.style.width = total ? Math.round(100 * s.count / total) + "%" : "0";
+      c.btn.textContent = s.healthy ? "Healthy ✓ (click to fail)" : "Unhealthy ✗ (click to fix)";
+      c.el.style.opacity = s.healthy ? "1" : ".5";
+      c.el.style.background = hit === i ? "var(--orange-soft)" : "var(--surface)";
+    });
+  }
+  function send(n) {
+    var seq = sequence();
+    if (!seq.length) { out.className = "output bad"; out.textContent = "All targets are unhealthy: the load balancer has nowhere to send traffic (users get HTTP 503)."; paint(); return; }
+    var last;
+    for (var k = 0; k < n; k++) { last = seq[ptr % seq.length]; ptr++; servers[last].count++; total++; }
+    out.className = "output";
+    out.textContent = "Request #" + total + " → " + servers[last].name + ". Totals: " +
+      servers.map(function (s) { return s.name + " " + s.count; }).join(", ") +
+      (servers.some(function (s) { return !s.healthy; }) ? ". Unhealthy targets receive nothing." : ".");
+    paint(last);
+  }
+  document.getElementById("rr-one").addEventListener("click", function () { send(1); });
+  document.getElementById("rr-many").addEventListener("click", function () { send(12); });
+  document.getElementById("rr-reset").addEventListener("click", function () {
+    servers.forEach(function (s) { s.count = 0; s.healthy = true; }); ptr = 0; total = 0;
+    out.className = "output"; out.textContent = "No requests yet."; paint();
+  });
+  algo.addEventListener("change", function () { ptr = 0; });
+  paint();
+
+  /* --- chooser demo --- */
+  var CH = [
+    { q: "Route by URL path or host name", a: "ALB", why: "Path/host rules need the load balancer to read the HTTP request, which happens at Layer 7." },
+    { q: "Lowest possible latency", a: "NLB", why: "NLB forwards at Layer 4 without inspecting content, so it adds the least delay." },
+    { q: "UDP or custom TCP protocol", a: "NLB", why: "ALB only understands HTTP(S)/gRPC. NLB handles any TCP or UDP traffic." },
+    { q: "Fixed IP addresses for clients to allow-list", a: "NLB", why: "NLB can have one static (Elastic) IP per Availability Zone. ALB IPs change." },
+    { q: "Terminate HTTPS and route microservices", a: "ALB", why: "ALB terminates TLS and has listener rules that send each service's path to its own target group." },
+    { q: "Inspect all traffic with firewall appliances", a: "GWLB", why: "GWLB transparently passes packets through a scalable fleet of security appliances." },
+    { q: "Send 10% of users to a new version", a: "ALB", why: "ALB supports weighted target groups in a forward rule, which is handy for canary releases." }
+  ];
+  var pb = document.getElementById("pick-btns"), po = document.getElementById("pick-out"), btns = [];
+  CH.forEach(function (c) {
+    var b = document.createElement("button"); b.className = "btn"; b.type = "button"; b.textContent = c.q;
+    b.addEventListener("click", function () {
+      btns.forEach(function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      po.className = "output ok"; po.textContent = "→ " + c.a + ". " + c.why;
+    });
+    btns.push(b); pb.appendChild(b);
+  });
+})();
+</script>
+</body>
+</html>

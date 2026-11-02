@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project: CI with CodeBuild · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .phase-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+  .phase { font: 600 12px var(--mono); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); }
+  .phase.run { border-color: var(--orange); background: var(--orange-soft); color: var(--text); }
+  .phase.ok { border-color: var(--green); background: var(--green-soft); color: var(--green); }
+  .phase.fail { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+  .cb-log { font: 13px/1.5 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow-y: auto; }
+  .cb-log .l-err { color: var(--red); font-weight: 700; }
+  .cb-log .l-ok { color: var(--green); font-weight: 700; }
+  .cb-log .l-ph { color: var(--blue); font-weight: 700; }
+  .fix-list { display: grid; gap: 6px; margin: 8px 0; }
+  .fix-list label { display: flex; gap: 8px; align-items: flex-start; }
+  .fix-list input { margin-top: 5px; accent-color: var(--orange); }
+</style>
+</head>
+<body data-page="16">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Project: CI with CodeBuild</h1>
+    <p class="lead">Build a real continuous integration pipeline: every commit to GitHub automatically builds a Docker image of a Python app and pushes it to Docker Hub, using AWS CodeBuild and CodePipeline. You'll also see the errors you're likely to hit, and how to fix each one.</p>
+  </header>
+
+  <div class="xref-box"><div>This is a hands-on project. What CI/CD means is covered in <a href="14-cicd-codecommit.html">Lesson 14</a>, and how CodePipeline coordinates other services is in <a href="15-codepipeline.html">Lesson 15</a>. This lesson does only the <b>CI</b> half. The deploy (CD) half comes next in <a href="17-codedeploy-cd.html">Lesson 17</a>.</div></div>
+
+  <h2>What we're building</h2>
+  <p>The goal: a developer pushes code, and with no manual steps a fresh, tested Docker image ends up in a registry, ready to deploy. Four pieces work together:</p>
+  <ul>
+    <li><b>GitHub</b> holds the source code. GitHub is used here instead of CodeCommit because it's what most teams use, and it needs a bit of extra setup.</li>
+    <li><b>CodePipeline</b> is the <i>orchestrator</i>. It notices the commit and tells the other services to run, in order.</li>
+    <li><b>CodeBuild</b> does the actual work: installs dependencies, builds the Docker image, pushes it.</li>
+    <li><b>Systems Manager Parameter Store</b> keeps the Docker Hub username and password out of the code.</li>
+  </ul>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 270" role="img" aria-label="A commit on GitHub triggers CodePipeline, which starts CodeBuild. CodeBuild runs install, pre_build, build and post_build phases, reads secrets from Parameter Store, and pushes the image to Docker Hub.">
+      <defs><marker id="arr16" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="10" y="80" width="110" height="64" rx="8"/>
+      <text class="s-text-b" x="65" y="108" text-anchor="middle">GitHub</text>
+      <text class="s-text-s" x="65" y="128" text-anchor="middle">git push</text>
+      <path class="s-line" d="M120 112 H152" marker-end="url(#arr16)"/>
+      <rect class="s-ink" x="155" y="80" width="130" height="64" rx="8"/>
+      <text class="s-text-w" x="220" y="108" text-anchor="middle">CodePipeline</text>
+      <text class="s-text-w" x="220" y="128" text-anchor="middle" style="font-weight:400;font-size:12px">orchestrator</text>
+      <path class="s-line" d="M285 112 H317" marker-end="url(#arr16)"/>
+      <rect class="s-orange-soft" x="320" y="20" width="190" height="180" rx="10"/>
+      <text class="s-text-b" x="415" y="44" text-anchor="middle">CodeBuild</text>
+      <rect class="s-box" x="340" y="58" width="150" height="26" rx="5"/>
+      <text class="s-text" x="415" y="76" text-anchor="middle">install</text>
+      <rect class="s-box" x="340" y="92" width="150" height="26" rx="5"/>
+      <text class="s-text" x="415" y="110" text-anchor="middle">pre_build</text>
+      <rect class="s-box" x="340" y="126" width="150" height="26" rx="5"/>
+      <text class="s-text" x="415" y="144" text-anchor="middle">build</text>
+      <rect class="s-box" x="340" y="160" width="150" height="26" rx="5"/>
+      <text class="s-text" x="415" y="178" text-anchor="middle">post_build</text>
+      <path class="s-line-o" d="M510 139 H547" marker-end="url(#arr16)"/>
+      <text class="s-text-s" x="529" y="130" text-anchor="middle">push</text>
+      <rect class="s-blue" x="550" y="106" width="120" height="64" rx="8"/>
+      <text class="s-text-b" x="610" y="134" text-anchor="middle">Docker Hub</text>
+      <text class="s-text-s" x="610" y="154" text-anchor="middle">image:latest</text>
+      <rect class="s-purple" x="320" y="222" width="190" height="40" rx="8"/>
+      <text class="s-text-b" x="415" y="247" text-anchor="middle">Parameter Store</text>
+      <path class="s-line" d="M415 222 V203" marker-end="url(#arr16)"/>
+      <text class="s-text-s" x="525" y="247">credentials</text>
+    </svg>
+    <figcaption>The CI flow. CodePipeline only coordinates; CodeBuild runs the phases written in <code>buildspec.yml</code>.</figcaption>
+  </figure>
+
+  <h2>The sample application</h2>
+  <p>The app is a tiny Python <b>Flask</b> "hello world" web app. The steps are exactly the same for a big app. The repo folder contains:</p>
+  <ul>
+    <li><code>app.py</code>: the Flask code.</li>
+    <li><code>requirements.txt</code>: Python dependencies (just <code>flask</code>).</li>
+    <li><code>Dockerfile</code>: starts from a Python base image, copies <code>requirements.txt</code>, installs it, copies the code, exposes port 5000 and starts Flask.</li>
+  </ul>
+  <div class="xref-box"><div>New to Docker images and registries? The quick primer is in <a href="22-ecr.html">Lesson 22: ECR</a>. Here we push to Docker Hub; ECR is AWS's own registry.</div></div>
+
+  <h2>Step 1: Create the CodeBuild project</h2>
+  <p><b>CodeBuild</b> is a fully managed build service. You don't run any build servers. When a build starts, AWS spins up a fresh build machine, runs your commands, then throws it away. You pay per build minute.</p>
+  <ol class="steps">
+    <li><b>Name and description.</b> In the console, open CodeBuild → <i>Create build project</i>. Give it a clear name (e.g. <code>sample-python-flask-service</code>). In a company you'd name it after the real service, like <code>payments-service</code>. You can leave the concurrent build limit off.</li>
+    <li><b>Source.</b> Pick <b>GitHub</b>. CodeBuild supports GitHub, GitHub Enterprise, Bitbucket, CodeCommit and S3. For anything else (e.g. GitLab), you <i>mirror</i> the repo to a supported source, meaning you keep a copy that's updated automatically. Click <i>Connect to GitHub</i>, choose OAuth, and confirm in the pop-up. Then enter your repository.</li>
+    <li><b>Environment.</b> This is the machine your build runs on. Choose a <b>managed image</b>, operating system <b>Ubuntu</b>, runtime <b>Standard</b>, and the latest image. In Jenkins you'd have to create and maintain these worker nodes yourself; here AWS provides them ready-made.</li>
+    <li><b>Service role.</b> CodeBuild needs permission to call other AWS services. Services get permissions through an <b>IAM role</b>, not an IAM user (users are for people). Let the console create a new service role, or create one in IAM → Roles → <i>Create role</i> → trusted service <b>CodeBuild</b>. You'll add permissions to it later.</li>
+    <li><b>Buildspec.</b> Choose <i>Insert build commands</i> → <i>Switch to editor</i> to write the build file in the console (next section). You could also keep <code>buildspec.yml</code> in your repo, which is the more common choice in real teams.</li>
+  </ol>
+  <div class="xref-box"><div>Roles vs users, and why services use roles, are explained in <a href="03-iam.html">Lesson 3: IAM</a>.</div></div>
+
+  <h2>Step 2: Write the buildspec.yml</h2>
+  <p>The <b>buildspec</b> is a YAML file that tells CodeBuild what to run. It's CodeBuild's version of a Jenkinsfile or a GitHub Actions workflow. The editor gives you a commented-out template, so you mostly uncomment what you need.</p>
+  <p>Your commands go into four <b>phases</b>, which always run in this order:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Phase</th><th>What goes here</th><th>In this project</th></tr>
+    <tr><td><code>install</code></td><td>Pick language runtimes, install tools</td><td>Python 3.11</td></tr>
+    <tr><td><code>pre_build</code></td><td>Things needed <i>before</i> building: dependencies, logins</td><td><code>pip install -r requirements.txt</code></td></tr>
+    <tr><td><code>build</code></td><td>The main work: compile, test, build the image</td><td>docker login, build, push</td></tr>
+    <tr><td><code>post_build</code></td><td>Wrap-up: notifications, extra pushes</td><td>Print "build is successful"</td></tr>
+  </table></div>
+  <p>You don't need a "checkout" step. CodeBuild clones the source repo for you before <code>install</code> starts.</p>
+
+<pre><code>version: 0.2
+
+env:
+  parameter-store:
+    DOCKER_REGISTRY_USERNAME: /myapp/docker-credentials/username
+    DOCKER_REGISTRY_PASSWORD: /myapp/docker-credentials/password
+    DOCKER_REGISTRY_URL: /myapp/docker-registry/url
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+  pre_build:
+    commands:
+      - echo "Installing dependencies..."
+      - pip install -r simple-python-app/requirements.txt
+  build:
+    commands:
+      - cd simple-python-app
+      - echo "Building Docker image..."
+      - echo "$DOCKER_REGISTRY_PASSWORD" | docker login -u "$DOCKER_REGISTRY_USERNAME" --password-stdin "$DOCKER_REGISTRY_URL"
+      - docker build -t "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest" .
+      - docker push "$DOCKER_REGISTRY_URL/$DOCKER_REGISTRY_USERNAME/simple-python-flask-app:latest"
+  post_build:
+    commands:
+      - echo "Build is successful"</code></pre>
+  <p>A few things to notice:</p>
+  <ul>
+    <li><b>Paths are relative to the repo root.</b> The app lives in a sub-folder (<code>simple-python-app/</code>), so the <code>pip install</code> path and the <code>cd</code> must include it. If your code is at the repo root, drop the folder part.</li>
+    <li><b>Runtime matches your app.</b> Python app → <code>python</code>. A Java app would use <code>java</code>, a Go app <code>golang</code>.</li>
+    <li><b>No secrets in the file.</b> The username, password and registry URL are environment variables filled in from Parameter Store at build time.</li>
+    <li><b>The image tag</b> looks like <code>docker.io/&lt;username&gt;/simple-python-flask-app:latest</code>. That's registry / user / image name : tag.</li>
+  </ul>
+
+  <h2>Step 3: Store credentials in Parameter Store</h2>
+  <p>If you write your Docker Hub password in the buildspec, anyone who can read the file can use your account. Instead, store it in <b>AWS Systems Manager Parameter Store</b>. It plays the same role as Jenkins' credential store or GitHub Actions secrets.</p>
+  <ol class="steps">
+    <li>Open <b>Systems Manager → Parameter Store → Create parameter</b>.</li>
+    <li>Name it with a clear, consistent pattern, for example <code>/myapp/docker-credentials/username</code>. The pattern is <i>app → kind of credential → field</i>. Once you have hundreds of secrets for many services, a naming standard is what lets you find the right one.</li>
+    <li>Choose type <b>SecureString</b> (encrypted) and keep the default encryption key.</li>
+    <li>Enter the value. Create three parameters: username, password, and registry URL (<code>docker.io</code>).</li>
+  </ol>
+  <p>In the buildspec's <code>env: parameter-store:</code> block, the <b>left side</b> is the variable name your commands use (you choose it). The <b>right side</b> must match the parameter name exactly, because that's where the value comes from.</p>
+  <div class="xref-box"><div>When to use Parameter Store, Secrets Manager or Vault (and how rotation works) is covered in <a href="25-secrets-management.html">Lesson 25: Secrets Management</a>.</div></div>
+
+  <h2>Step 4: Run the build and fix the errors</h2>
+  <p>Click <b>Start build</b>. Your first build will very likely fail, and that's normal. Reading the build log and fixing one error at a time is the real skill here. These are the errors you're most likely to see, in roughly the order they show up:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Error in the log</th><th>Why</th><th>Fix</th></tr>
+    <tr><td>Access denied reading the parameters (<code>ssm:GetParameters</code>)</td><td>The CodeBuild service role isn't allowed to read Parameter Store.</td><td>IAM → Roles → your CodeBuild role → <i>Add permissions</i> → attach an SSM policy (read-only access is enough; full access is fine only for a throwaway demo).</td></tr>
+    <tr><td><code>Could not open requirements file: No such file or directory</code></td><td>The path in the buildspec doesn't match the repo (e.g. a typo in the folder name).</td><td>Edit the buildspec with the exact path.</td></tr>
+    <tr><td><code>"docker build" requires exactly 1 argument</code></td><td>The <code>.</code> at the end of <code>docker build</code> is missing. The dot is the <i>build context</i>: "use the Dockerfile and files in this folder".</td><td>Add the trailing <code>.</code></td></tr>
+    <tr><td><code>Cannot connect to the Docker daemon</code></td><td>By default, CodeBuild build machines aren't allowed to run Docker builds.</td><td>Edit project → Environment → <i>Override image</i> → tick <b>Privileged</b>.</td></tr>
+    <tr><td><code>denied: requested access to the resource is denied</code> on push</td><td>The credentials were loaded but nobody logged in to the registry.</td><td>Add the <code>docker login</code> line before build/push.</td></tr>
+  </table></div>
+  <div class="callout tip"><span class="callout-title">Tip</span>Read the build logs even when builds pass. They show exactly what CodeBuild does in each phase, and that makes the next failure much faster to debug.</div>
+  <p>Once the build succeeds, open Docker Hub, go to your user's repositories and you'll see <code>simple-python-flask-app</code> with a <code>latest</code> tag updated a minute ago.</p>
+
+  <div class="demo" id="demo-cb">
+    <div class="demo-head">Try it: run a CodeBuild build</div>
+    <div class="demo-body">
+      <p>Tick the fixes you've applied, then start a build. The simulated log stops at the first problem, just like a real build. Turn on all five to get a green build.</p>
+      <div class="fix-list">
+        <label><input type="checkbox" id="cb-ssm"> Service role can read Parameter Store</label>
+        <label><input type="checkbox" id="cb-path"> Correct path to <code>requirements.txt</code></label>
+        <label><input type="checkbox" id="cb-login"> <code>docker login</code> step included</label>
+        <label><input type="checkbox" id="cb-dot"> <code>docker build</code> ends with <code>.</code></label>
+        <label><input type="checkbox" id="cb-priv"> Privileged mode enabled</label>
+      </div>
+      <div class="row"><button class="btn primary" id="cb-go">Start build</button><button class="btn" id="cb-all">Apply all fixes</button></div>
+      <div class="phase-row" id="cb-phases"></div>
+      <div class="output cb-log" id="cb-out">Build log appears here.</div>
+    </div>
+  </div>
+
+  <h2>Step 5: Automate it with CodePipeline</h2>
+  <p>Right now you have to press <i>Start build</i> yourself. To make it real CI, let CodePipeline start CodeBuild whenever someone commits:</p>
+  <ol class="steps">
+    <li>CodePipeline → <b>Create pipeline</b>. Give it a name and let it create a new service role.</li>
+    <li><b>Source stage:</b> provider <b>GitHub (Version 2)</b>. Click <i>Connect to GitHub</i>, name the connection and approve it. This connection is how GitHub tells the pipeline "something changed". Pick the repository and branch <code>main</code>.</li>
+    <li><b>Build stage:</b> provider <b>AWS CodeBuild</b>, choose the project you just made, single build.</li>
+    <li><b>Deploy stage:</b> skip it for now. It gets added in the CD lesson.</li>
+    <li>Review and <b>Create pipeline</b>. It runs once straight away.</li>
+  </ol>
+  <p>Now test it: commit any small change to the repo. The pipeline's Source stage turns "In progress", then Build. Click <i>Details</i> to watch the CodeBuild job, and a minute or two later Docker Hub shows the image as "pushed a few seconds ago". No one pressed a button.</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Walk me through a CI pipeline you built on AWS." Mention the trigger (GitHub connection → CodePipeline), what the buildspec phases do, how secrets are kept out of the code (Parameter Store + IAM role permissions), and one real error you fixed, such as privileged mode for Docker builds. Real errors you've fixed make your answer believable.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your CodeBuild log says "Cannot connect to the Docker daemon". What do you change?</div>
+    <div class="opts"><button>Add Docker to requirements.txt</button><button>Give the service role Docker Hub permissions</button><button>Enable Privileged mode in the build environment</button></div>
+    <div class="explain">CodeBuild build machines can't run Docker builds unless the environment is in privileged mode.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Why is the Docker password stored in Parameter Store instead of the buildspec?</div>
+    <div class="opts"><button>Anyone who can read the buildspec would see the password</button><button>The buildspec can't contain environment variables</button><button>Docker Hub only accepts passwords from AWS</button></div>
+    <div class="explain">The buildspec is usually readable by the whole team, or even public. A SecureString parameter keeps the secret encrypted, and only roles with permission can read it.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">In this setup, what does CodePipeline do?</div>
+    <div class="opts"><button>Builds the Docker image</button><button>Detects the commit and tells CodeBuild to run</button><button>Stores the Docker image</button></div>
+    <div class="explain">CodePipeline is the orchestrator. CodeBuild does the building, and Docker Hub stores the image.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>CodeBuild is a managed build service: AWS provides the build machine, you provide a <code>buildspec.yml</code>.</li>
+      <li>Buildspec phases run in order: <code>install</code> → <code>pre_build</code> → <code>build</code> → <code>post_build</code>. The source checkout happens automatically.</li>
+      <li>Keep secrets in Parameter Store (SecureString) and load them with <code>env: parameter-store:</code>. The CodeBuild service role needs permission to read them.</li>
+      <li>Docker builds in CodeBuild need <b>Privileged mode</b>, a <code>docker login</code>, and the trailing <code>.</code> on <code>docker build</code>.</li>
+      <li>CodePipeline with a GitHub connection makes it real CI: every commit triggers a build automatically.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var PHASES = ["SUBMITTED", "PROVISIONING", "DOWNLOAD_SOURCE", "INSTALL", "PRE_BUILD", "BUILD", "POST_BUILD", "COMPLETED"];
+  var phaseBox = document.getElementById("cb-phases");
+  var out = document.getElementById("cb-out");
+  var goBtn = document.getElementById("cb-go");
+  var timer = null;
+
+  function drawPhases(states) {
+    phaseBox.innerHTML = "";
+    PHASES.forEach(function (p, i) {
+      var s = document.createElement("span");
+      s.className = "phase" + (states[i] ? " " + states[i] : "");
+      s.textContent = p;
+      phaseBox.appendChild(s);
+    });
+  }
+  function checked(id) { return document.getElementById(id).checked; }
+
+  function buildScript() {
+    var f = { ssm: checked("cb-ssm"), path: checked("cb-path"), login: checked("cb-login"), dot: checked("cb-dot"), priv: checked("cb-priv") };
+    var s = [];
+    function ph(i, lines) { s.push({ phase: i, lines: lines }); }
+    ph(0, [["ph", "Phase SUBMITTED: build queued"]]);
+    ph(1, [["", "Provisioning Ubuntu standard image (managed)..."]]);
+    ph(2, [["", "Cloning source from GitHub (branch main)..."], ["", "Reading /myapp/docker-credentials/* from Parameter Store"]]);
+    if (!f.ssm) { s.push({ fail: 2, lines: [["err", "AccessDeniedException: role is not authorized to perform ssm:GetParameters"]] }); return s; }
+    ph(3, [["", "Running: install runtime python 3.11"], ["", "python 3.11 ready"]]);
+    ph(4, [["", "Running: pip install -r " + (f.path ? "simple-python-app" : "sample-python-app") + "/requirements.txt"]]);
+    if (!f.path) { s.push({ fail: 4, lines: [["err", "ERROR: Could not open requirements file: No such file or directory"]] }); return s; }
+    s.push({ phase: 4, lines: [["", "Successfully installed flask"]] });
+    ph(5, [["", "Running: cd simple-python-app"], ["", "Building Docker image..."]]);
+    var dockerUp = f.priv;
+    if (f.login) {
+      s.push({ phase: 5, lines: [["", "Running: echo $DOCKER_REGISTRY_PASSWORD | docker login ..."]] });
+      if (!dockerUp) { s.push({ fail: 5, lines: [["err", "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"]] }); return s; }
+      s.push({ phase: 5, lines: [["", "Login Succeeded"]] });
+    }
+    s.push({ phase: 5, lines: [["", "Running: docker build -t docker.io/<user>/simple-python-flask-app:latest" + (f.dot ? " ." : "")]] });
+    if (!f.dot) { s.push({ fail: 5, lines: [["err", "\"docker build\" requires exactly 1 argument."]] }); return s; }
+    if (!dockerUp) { s.push({ fail: 5, lines: [["err", "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"]] }); return s; }
+    s.push({ phase: 5, lines: [["", "Step 1/6 : FROM python:3.11 ... Step 6/6 : CMD flask run"], ["", "Successfully tagged docker.io/<user>/simple-python-flask-app:latest"], ["", "Running: docker push docker.io/<user>/simple-python-flask-app:latest"]] });
+    if (!f.login) { s.push({ fail: 5, lines: [["err", "denied: requested access to the resource is denied"]] }); return s; }
+    s.push({ phase: 5, lines: [["", "latest: digest: sha256:9f2c... size: 2210"]] });
+    ph(6, [["", "Running: echo \"Build is successful\""], ["", "Build is successful"]]);
+    s.push({ done: true, lines: [["ok", "Phase COMPLETED: SUCCEEDED. New image is on Docker Hub."]] });
+    return s;
+  }
+
+  function addLine(cls, text) {
+    var d = document.createElement("div");
+    if (cls) d.className = "l-" + cls;
+    d.textContent = text;
+    out.appendChild(d);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  function run() {
+    if (timer) clearTimeout(timer);
+    var script = buildScript();
+    var states = PHASES.map(function () { return ""; });
+    out.className = "output cb-log";
+    out.innerHTML = "";
+    drawPhases(states);
+    var i = 0;
+    function step() {
+      if (i >= script.length) return;
+      var st = script[i++];
+      if (typeof st.phase === "number") {
+        for (var k = 0; k < st.phase; k++) states[k] = "ok";
+        states[st.phase] = "run";
+        if (st.lines[0] && st.lines[0][1].indexOf("Phase") !== 0 && (i === 1 || script[i - 2].phase !== st.phase)) addLine("ph", "Phase " + PHASES[st.phase] + " started");
+      }
+      if (typeof st.fail === "number") { states[st.fail] = "fail"; out.className = "output cb-log bad"; }
+      if (st.done) { for (var j = 0; j < states.length; j++) states[j] = "ok"; out.className = "output cb-log ok"; }
+      st.lines.forEach(function (l) { addLine(l[0], l[1]); });
+      if (typeof st.fail === "number") addLine("err", "Phase " + PHASES[st.fail] + " FAILED. Fix the problem above and start a new build.");
+      drawPhases(states);
+      timer = setTimeout(step, 450);
+    }
+    step();
+  }
+
+  drawPhases(PHASES.map(function () { return ""; }));
+  goBtn.addEventListener("click", run);
+  document.getElementById("cb-all").addEventListener("click", function () {
+    ["cb-ssm", "cb-path", "cb-login", "cb-dot", "cb-priv"].forEach(function (id) { document.getElementById(id).checked = true; });
+  });
+})();
+</script>
+</body>
+</html>

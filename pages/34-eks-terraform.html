@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project: EKS + VPC with Terraform · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .lock-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .lock-card { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface-2); }
+  .lock-card h4 { margin: 0 0 6px; font-size: 15px; }
+  .lock-card .st { font-size: 14px; color: var(--text-2); min-height: 40px; }
+  .lock-state { margin-top: 10px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 8px; font-size: 14px; }
+  .lock-log { font: 13px var(--mono); max-height: 180px; overflow-y: auto; white-space: pre-wrap; }
+  @media (max-width: 420px) { .lock-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body data-page="34">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Project: EKS + VPC with Terraform</h1>
+    <p class="lead">Use community Terraform <strong>modules</strong> to build a production-style VPC and an EKS cluster with auto-scaling worker nodes in about 55 resources and one command. You'll also learn how teams store Terraform state safely so two people can't break it at the same time.</p>
+  </header>
+
+  <div class="xref-box"><div>New to Terraform? Providers, resources, variables, state and <code>plan</code>/<code>apply</code> are explained in <a href="26-terraform.html">Lesson 26: Terraform</a>. EKS itself is covered in <a href="24-eks.html">Lesson 24</a>.</div></div>
+
+  <h2>What we're building</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 330" role="img" aria-label="Terraform on a laptop uses AWS credentials to create a VPC with public and private subnets, an EKS control plane and a managed node group with 2 to 6 EC2 nodes; state can be stored in S3 with a DynamoDB lock">
+      <defs><marker id="arr34" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="10" y="40" width="150" height="70" rx="10"/>
+      <text class="s-text-w" x="85" y="70" text-anchor="middle">Laptop / VM</text>
+      <text class="s-text-w" x="85" y="92" text-anchor="middle" style="font-weight:400;font-size:12px">terraform + aws cli</text>
+      <path class="s-line-o" d="M160 75 H208" marker-end="url(#arr34)"/>
+      <text class="s-text-s" x="184" y="66" text-anchor="middle">apply</text>
+      <rect class="s-dash" x="210" y="10" width="480" height="310" rx="12"/>
+      <text class="s-text-s" x="222" y="28">AWS account · region</text>
+      <rect class="s-blue" x="225" y="38" width="450" height="200" rx="10"/>
+      <text class="s-text-b" x="240" y="58">VPC (vpc module)</text>
+      <rect class="s-box" x="240" y="70" width="200" height="40" rx="6"/>
+      <text class="s-text" x="340" y="95" text-anchor="middle">Public subnets + NAT</text>
+      <rect class="s-box" x="460" y="70" width="200" height="40" rx="6"/>
+      <text class="s-text" x="560" y="95" text-anchor="middle">Private subnets (×3 AZ)</text>
+      <rect class="s-orange-soft" x="240" y="125" width="200" height="98" rx="8"/>
+      <text class="s-text-b" x="340" y="160" text-anchor="middle">EKS control plane</text>
+      <text class="s-text-s" x="340" y="180" text-anchor="middle">(eks module)</text>
+      <text class="s-text-s" x="340" y="198" text-anchor="middle">managed by AWS</text>
+      <rect class="s-green" x="460" y="125" width="200" height="98" rx="8"/>
+      <text class="s-text-b" x="560" y="148" text-anchor="middle">Managed node group</text>
+      <text class="s-text-s" x="560" y="166" text-anchor="middle">min 2 · desired 2 · max 6</text>
+      <rect class="s-box" x="478" y="178" width="76" height="32" rx="5"/>
+      <text class="s-text" x="516" y="199" text-anchor="middle">EC2</text>
+      <rect class="s-box" x="566" y="178" width="76" height="32" rx="5"/>
+      <text class="s-text" x="604" y="199" text-anchor="middle">EC2</text>
+      <path class="s-line" d="M440 174 H458" marker-end="url(#arr34)"/>
+      <rect class="s-purple" x="225" y="250" width="200" height="56" rx="8"/>
+      <text class="s-text-b" x="325" y="274" text-anchor="middle">Security groups</text>
+      <text class="s-text-s" x="325" y="293" text-anchor="middle">inbound / outbound rules</text>
+      <rect class="s-box2" x="440" y="250" width="235" height="56" rx="8"/>
+      <text class="s-text-b" x="557" y="274" text-anchor="middle">S3 state + lock</text>
+      <text class="s-text-s" x="557" y="293" text-anchor="middle">recommended for teams</text>
+    </svg>
+    <figcaption>Terraform runs on your machine and creates everything inside your AWS account. The node group keeps 2 nodes normally and can grow to 6 under load.</figcaption>
+  </figure>
+
+  <h2>Step 1–3: Install and connect</h2>
+  <ol class="steps">
+    <li><strong>Install the AWS CLI</strong> (from the AWS "Install or update the AWS CLI" page for your OS), then check: <code>aws --version</code>.</li>
+    <li><strong>Install Terraform</strong> (HashiCorp's install page: package manager on Linux, Homebrew on Mac, Chocolatey or a zip on Windows), then check: <code>terraform version</code>.</li>
+    <li><strong>Connect Terraform to AWS</strong> by running <code>aws configure</code> and entering an access key, secret key, default region and output format (<code>json</code>). This saves the keys in <code>~/.aws/credentials</code>. Terraform's AWS provider reads that same file, so configuring the CLI also configures Terraform.</li>
+  </ol>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Use an <strong>IAM user or role</strong> with the right permissions, not root access keys, in any real account. Delete demo access keys when you're done. (<a href="03-iam.html">IAM</a>, <a href="12-aws-cli.html">AWS CLI &amp; access keys</a>)</div>
+
+  <h2>How to structure the Terraform files</h2>
+  <p>You <em>could</em> put everything in one <code>main.tf</code>, but a 500-line file is hard to read and fix. Split by purpose, so the person fixing a security-group rule opens <code>security-groups.tf</code> and nothing else:</p>
+  <div class="table-wrap"><table>
+    <tr><th>File</th><th>What's inside</th></tr>
+    <tr><td><code>versions.tf</code></td><td>Required Terraform version and providers (aws, random, …)</td></tr>
+    <tr><td><code>variables.tf</code></td><td>Inputs: AWS region, Kubernetes version, VPC CIDR</td></tr>
+    <tr><td><code>vpc.tf</code></td><td>The <code>aws</code> provider, a random suffix for the cluster name, and the VPC module</td></tr>
+    <tr><td><code>eks-cluster.tf</code></td><td>The EKS module and its managed node group</td></tr>
+    <tr><td><code>security-groups.tf</code></td><td>Extra security group with inbound/outbound rules for the nodes</td></tr>
+    <tr><td><code>outputs.tf</code></td><td>Values printed after <code>apply</code> (cluster name, endpoint, region…)</td></tr>
+  </table></div>
+
+  <h2>Terraform modules</h2>
+  <p>A <strong>module</strong> is a reusable package of Terraform code. You call it, pass in a few inputs, and it creates all the resources inside. Think of it as a function: you don't rewrite the code for a VPC (subnets, route tables, internet gateway, NAT…) every time; you call the VPC module with your settings.</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A flat-pack furniture kit. You don't cut wood and design joints yourself; you pick the "wardrobe" kit and choose the size and colour. A module is the kit; the inputs are your choices.</div>
+  <p>Why modules are a best practice:</p>
+  <ul>
+    <li><strong>No duplicate code.</strong> If project X and project Y both need "S3 bucket + EC2", write it once as a module and call it twice.</li>
+    <li><strong>Fix once, fix everywhere.</strong> When a security update changes how something should be built, you update the module and every caller benefits. Callers only pass variables, so they don't break.</li>
+    <li><strong>Battle-tested code.</strong> Common building blocks like VPC and EKS already exist as community modules.</li>
+  </ul>
+  <p>Where to look for a module, in order:</p>
+  <ol>
+    <li>The <strong>Terraform Registry</strong> (<code>registry.terraform.io</code>), e.g. the community-maintained <code>terraform-aws-modules</code> collection, which has VPC, EKS, S3, RDS and more.</li>
+    <li><strong>Your organisation's own modules</strong> (often in a Git repo), written by another team for the same need.</li>
+    <li>If neither exists, write the code yourself, then consider turning it into a module for the next person.</li>
+  </ol>
+
+  <h3>The VPC module</h3>
+  <p>Every module call has a <code>source</code> (where the module comes from) and a <code>version</code>. <strong>Always pin the version.</strong> Without it you get whatever is newest, and a breaking change could hit you without warning. For a new project, start with the latest version.</p>
+<pre><code>provider "aws" {
+  region = var.aws_region
+}
+
+locals {
+  cluster_name = "abhi-eks-${random_string.suffix.result}"
+}
+
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+}
+
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "5.7.0"
+
+  name = "abhi-eks-vpc"
+  cidr = var.vpc_cidr
+  azs  = data.aws_availability_zones.available.names
+
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+  public_subnets  = ["10.0.4.0/24", "10.0.5.0/24", "10.0.6.0/24"]
+
+  enable_nat_gateway   = true
+  single_nat_gateway   = true
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = {
+    "kubernetes.io/cluster/${local.cluster_name}" = "shared"
+  }
+}
+
+data "aws_availability_zones" "available" {}</code></pre>
+  <p>How do you know which inputs exist? Open the module's page in the registry and read its <strong>Inputs</strong>, <strong>Outputs</strong> and <strong>Examples</strong>. Some inputs are required (like <code>name</code> and <code>cidr</code>), most are optional. With practice you'll know which ones matter. The <code>random_string</code> adds an 8-character suffix so every cluster name is unique.</p>
+
+  <h3>The EKS module</h3>
+<pre><code>module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~&gt; 20.0"
+
+  cluster_name    = local.cluster_name
+  cluster_version = var.kubernetes_version
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.private_subnets
+
+  eks_managed_node_group_defaults = {
+    ami_type               = "AL2_x86_64"
+    instance_types         = ["t3.medium"]
+    vpc_security_group_ids = [aws_security_group.all_worker_mgmt.id]
+  }
+
+  eks_managed_node_groups = {
+    node_group = {
+      min_size     = 2
+      desired_size = 2
+      max_size     = 6
+    }
+  }
+}</code></pre>
+  <p>Note how modules plug together: <code>module.vpc.vpc_id</code> and <code>module.vpc.private_subnets</code> are <strong>outputs</strong> of the VPC module fed into the EKS module. Terraform works out the order: VPC first, then EKS. An <strong>EKS managed node group</strong> means AWS creates an Auto Scaling Group and launch template for the worker nodes; you set min/desired/max. (The module's examples also show Fargate profiles, Karpenter and self-managed node groups.)</p>
+
+  <h3>Variables and outputs</h3>
+<pre><code># variables.tf
+variable "aws_region" {
+  default = "us-east-1"
+}
+variable "kubernetes_version" {
+  default = "1.29"
+}
+variable "vpc_cidr" {
+  default = "10.0.0.0/16"
+}
+
+# outputs.tf
+output "cluster_name"     { value = module.eks.cluster_name }
+output "cluster_endpoint" { value = module.eks.cluster_endpoint }
+output "region"           { value = var.aws_region }</code></pre>
+  <p>Outputs are printed at the end of <code>apply</code>, so you don't have to dig through the console to find the cluster name or endpoint.</p>
+
+  <h2>Step 4: Run it</h2>
+<pre><code>terraform init      # downloads providers and modules into .terraform/
+terraform plan      # preview: about 55 resources to add
+terraform apply     # type "yes" (or add -auto-approve); takes roughly 10-15 min</code></pre>
+  <ul>
+    <li><strong>Read the <code>init</code> output.</strong> It says which backend it's using (local here), downloads each module into <code>.terraform/modules/</code> (you'll find <code>eks</code> and <code>vpc</code>), and downloads every provider listed in <code>versions.tf</code> into <code>.terraform/providers/</code>. Unused providers left in <code>versions.tf</code> still get downloaded, so remove them.</li>
+    <li><strong>Read the plan.</strong> You'll see the VPC, subnets, route tables, internet gateway, NAT gateway, security groups, IAM roles, the cluster and the node group. Reading a plan line by line is one of the best ways to learn what a module actually builds.</li>
+  </ul>
+
+  <h3>Getting access to the cluster</h3>
+  <p>When you open the new cluster in the console, the <em>Compute</em> and <em>Resources</em> tabs may say you have no access, even as root. EKS uses <strong>access entries</strong> to decide who can see inside the cluster. Under the cluster's <strong>Access</strong> tab:</p>
+  <ol>
+    <li>Click <em>Create access entry</em> and choose your IAM principal (user or role ARN).</li>
+    <li>Attach the <code>AmazonEKSClusterAdminPolicy</code> access policy.</li>
+    <li>Refresh: the nodes (2 by default) and resources now appear.</li>
+  </ol>
+  <p>You can also do this in Terraform (e.g. <code>enable_cluster_creator_admin_permissions = true</code> or an <code>access_entries</code> block in EKS module v20). Then connect <code>kubectl</code>:</p>
+<pre><code>aws eks update-kubeconfig --name &lt;cluster-name&gt; --region us-east-1
+kubectl get nodes</code></pre>
+  <div class="callout warn"><span class="callout-title">Watch out</span>NAT gateways, EKS control planes and EC2 nodes are <strong>not free</strong>. When you're done, run <code>terraform destroy</code>.</div>
+
+  <h2>Remote state and locking</h2>
+  <p>This demo uses the <strong>local backend</strong>: <code>terraform.tfstate</code> sits on your laptop. That's fine for learning, but in a team it causes two problems:</p>
+  <ul>
+    <li><strong>Nobody else has the state.</strong> A teammate running <code>apply</code> from their machine has an empty state, so Terraform thinks nothing exists and tries to create everything again.</li>
+    <li><strong>Simultaneous applies.</strong> Even with a shared state file, two people running <code>apply</code> at the same time can corrupt it or overwrite each other's changes.</li>
+  </ul>
+  <p>The usual fix is a <strong>remote backend</strong>: keep the state in an <strong>S3 bucket</strong> (shared, versioned, encrypted) and use a <strong>lock</strong> so only one <code>apply</code> can run at a time. Traditionally the lock is a row in a <strong>DynamoDB table</strong>:</p>
+<pre><code>terraform {
+  backend "s3" {
+    bucket         = "my-company-terraform-state"
+    key            = "eks/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-locks"   # table with a string partition key "LockID"
+  }
+}</code></pre>
+  <div class="callout"><span class="callout-title">Note</span>Terraform 1.10+ can also lock using S3 itself (<code>use_lockfile = true</code>), and newer versions mark the DynamoDB option as deprecated. You'll still see S3 + DynamoDB in most existing projects and interviews, and the idea is the same: <em>one writer at a time</em>.</div>
+
+  <div class="demo" id="demo-lock">
+    <div class="demo-head">Try it: two engineers, one apply</div>
+    <div class="demo-body">
+      <p>Pick a backend, then press <strong>Apply</strong> for both engineers quickly, one right after the other. See what happens to the state.</p>
+      <div class="row" role="group" aria-label="Backend">
+        <button class="btn" data-mode="local">Local state</button>
+        <button class="btn" data-mode="s3">S3, no lock</button>
+        <button class="btn" data-mode="lock" aria-pressed="true">S3 + lock</button>
+      </div>
+      <div class="lock-grid">
+        <div class="lock-card"><h4>Asha</h4><div class="st" id="lk-a-st">Idle. Change: add node group "gpu"</div><button class="btn primary" id="lk-a">Apply</button></div>
+        <div class="lock-card"><h4>Ben</h4><div class="st" id="lk-b-st">Idle. Change: add security rule 443</div><button class="btn primary" id="lk-b">Apply</button></div>
+      </div>
+      <div class="lock-state" id="lk-state"></div>
+      <div class="output lock-log" id="lk-log">Log appears here.</div>
+      <div class="row"><button class="btn" id="lk-reset">Reset</button></div>
+    </div>
+  </div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How do you manage Terraform state in a team?" Remote backend in S3 (versioning + encryption on, public access blocked), state locking (DynamoDB or S3 native lockfile), access limited with IAM, and applies run from a CI/CD pipeline rather than laptops. Also: "Why use modules?" Reuse, consistency, and fixing things in one place.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Why should you always set <code>version</code> when calling a registry module?</div>
+    <div class="opts"><button>Terraform refuses to run without it</button><button>So a new release with breaking changes can't silently change your infrastructure</button><button>It makes <code>terraform apply</code> faster</button></div>
+    <div class="explain">Pinning keeps builds repeatable. You upgrade on purpose, after reading the changelog, not by accident.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Two engineers run <code>terraform apply</code> at the same moment against an S3 backend with a DynamoDB lock table. What happens?</div>
+    <div class="opts"><button>The second one fails with "Error acquiring the state lock" until the first finishes</button><button>Both run and their state files are merged automatically</button><button>DynamoDB stores the state and S3 stores the lock</button></div>
+    <div class="explain">The first apply takes the lock (a LockID row in DynamoDB). The second can't get it and stops. The state lives in S3; DynamoDB only holds the lock.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">The cluster was created, but the console says you can't see its nodes. What's the fix?</div>
+    <div class="opts"><button>Run <code>terraform apply</code> again</button><button>Switch to the root user</button><button>Create an EKS access entry for your IAM principal with a cluster admin policy</button></div>
+    <div class="explain">EKS access entries control who can see Kubernetes objects. Even root needs one. You can also set this in Terraform.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><code>aws configure</code> stores credentials that Terraform's AWS provider also uses.</li>
+      <li>Split Terraform into files by purpose (vpc, eks, security groups, variables, outputs, versions) for readability.</li>
+      <li>Modules are reusable packages. Use registry or company modules, always pin <code>version</code>, and wire them together via outputs like <code>module.vpc.private_subnets</code>.</li>
+      <li><code>init</code> → <code>plan</code> (≈55 resources) → <code>apply</code>; then add an EKS access entry and run <code>aws eks update-kubeconfig</code>; finish with <code>terraform destroy</code>.</li>
+      <li>In teams, store state remotely in S3 with locking (DynamoDB or S3 lockfile) so only one apply runs at a time.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var mode = "lock", busy = {}, timers = [], serial = 3, stateItems = ["vpc", "eks cluster", "node group default"];
+  var lockOwner = null, laptopState = { a: null, b: null };
+  var log = document.getElementById("lk-log"), stEl = document.getElementById("lk-state");
+  var CH = { a: { name: "Asha", item: "node group gpu" }, b: { name: "Ben", item: "sg rule 443" } };
+  function line(s, cls) { if (log.textContent === "Log appears here.") log.textContent = ""; log.textContent += s + "\n"; log.scrollTop = log.scrollHeight; if (cls) log.className = "output lock-log " + cls; }
+  function status(who, s) { document.getElementById("lk-" + who + "-st").textContent = s; }
+  function renderState() {
+    if (mode === "local") {
+      stEl.innerHTML = "<strong>State:</strong> Asha's laptop: " + (laptopState.a ? laptopState.a.join(", ") : "(empty)") +
+        "<br>Ben's laptop: " + (laptopState.b ? laptopState.b.join(", ") : "(empty)") + "<br><span class='muted'>Real AWS: " + stateItems.join(", ") + "</span>";
+    } else {
+      stEl.innerHTML = "<strong>S3 state (serial " + serial + "):</strong> " + stateItems.join(", ") +
+        (mode === "lock" ? "<br><strong>Lock:</strong> " + (lockOwner ? "held by " + CH[lockOwner].name : "free") : "<br><span class='muted'>No lock table configured.</span>");
+    }
+  }
+  function reset() {
+    timers.forEach(clearTimeout); timers = []; busy = {}; serial = 3; lockOwner = null;
+    stateItems = ["vpc", "eks cluster", "node group default"];
+    laptopState = { a: stateItems.slice(), b: null };
+    status("a", "Idle. Change: add node group \"gpu\""); status("b", "Idle. Change: add security rule 443");
+    log.className = "output lock-log"; log.textContent = "Log appears here."; renderState();
+  }
+  function apply(who) {
+    if (busy[who]) return;
+    var me = CH[who];
+    busy[who] = true;
+    if (mode === "lock") {
+      if (lockOwner) {
+        line("[" + me.name + "] Acquiring state lock...");
+        line("[" + me.name + "] Error: Error acquiring the state lock. Lock Info: held by " + CH[lockOwner].name + ", Operation: OperationTypeApply", "bad");
+        status(who, "Blocked. Wait for the lock, then retry."); busy[who] = false; return;
+      }
+      lockOwner = who; renderState();
+      line("[" + me.name + "] Acquiring state lock... done. Reading state (serial " + serial + ")");
+      status(who, "Applying... (holds the lock)");
+      timers.push(setTimeout(function () {
+        stateItems.push(me.item); serial++; lockOwner = null;
+        line("[" + me.name + "] Apply complete! Wrote state serial " + serial + ". Releasing lock.", "ok");
+        status(who, "Done. Lock released."); busy[who] = false; renderState();
+      }, 3000));
+    } else if (mode === "s3") {
+      var snapshot = stateItems.slice(), readSerial = serial;
+      line("[" + me.name + "] No lock. Reading state (serial " + readSerial + ")");
+      status(who, "Applying...");
+      timers.push(setTimeout(function () {
+        var lost = stateItems.filter(function (x) { return snapshot.indexOf(x) < 0; });
+        snapshot.push(me.item); stateItems = snapshot; serial = readSerial + 1;
+        if (lost.length) {
+          line("[" + me.name + "] Wrote state serial " + serial + ". It OVERWROTE the other apply: '" + lost.join(", ") + "' exists in AWS but is gone from state!", "bad");
+          status(who, "Done, but the state lost the other change.");
+        } else {
+          line("[" + me.name + "] Apply complete. Wrote state serial " + serial + ".", "ok");
+          status(who, "Done.");
+        }
+        busy[who] = false; renderState();
+      }, 3000));
+    } else {
+      var mine = laptopState[who];
+      if (!mine) {
+        line("[" + me.name + "] No terraform.tfstate on this laptop. Terraform thinks NOTHING exists.");
+        line("[" + me.name + "] Plan: create vpc, eks cluster, node group default, " + me.item + " ...", "bad");
+        status(who, "Trying to create duplicates...");
+        timers.push(setTimeout(function () {
+          line("[" + me.name + "] Error: resources already exist / duplicate VPC created. Local state can't be shared.", "bad");
+          laptopState[who] = [me.item]; status(who, "Failed or made duplicates."); busy[who] = false; renderState();
+        }, 2500));
+      } else {
+        line("[" + me.name + "] Using local terraform.tfstate on own laptop.");
+        status(who, "Applying...");
+        timers.push(setTimeout(function () {
+          mine.push(me.item); stateItems.push(me.item);
+          line("[" + me.name + "] Apply complete. Only " + me.name + "'s laptop knows about it.", "ok");
+          status(who, "Done (state only on this laptop)."); busy[who] = false; renderState();
+        }, 2500));
+      }
+    }
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#demo-lock [data-mode]"), function (b, i, all) {
+    b.addEventListener("click", function () {
+      Array.prototype.forEach.call(all, function (x) { x.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true"); mode = b.getAttribute("data-mode"); reset();
+    });
+  });
+  document.getElementById("lk-a").addEventListener("click", function () { apply("a"); });
+  document.getElementById("lk-b").addEventListener("click", function () { apply("b"); });
+  document.getElementById("lk-reset").addEventListener("click", reset);
+  reset();
+})();
+</script>
+</body>
+</html>

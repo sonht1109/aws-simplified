@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Cost Optimization Project · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  .snap-table td, .snap-table th { font-size: 14px; padding: 7px 9px; }
+  .snap-table code { font-size: 13px; }
+  .snap-table tr.del td { opacity: .55; }
+  .snap-table tr.del td:first-child code { text-decoration: line-through; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+  .badge.keep { color: var(--green); border-color: var(--green); background: var(--green-soft); }
+  .badge.del { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+  .badge.would { color: var(--orange-strong); border-color: var(--orange); background: var(--orange-soft); }
+  .why { display: block; font-size: 12px; color: var(--text-2); margin-top: 2px; }
+  .sc-opts { display: grid; gap: 6px; margin: 8px 0; }
+  .sc-opts label { display: flex; gap: 8px; align-items: flex-start; }
+  .sc-opts input { margin-top: 5px; accent-color: var(--orange); }
+</style>
+</head>
+<body data-page="20">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Cloud Cost Optimization Project</h1>
+    <p class="lead">Forgotten AWS resources quietly add to the bill every month. In this project you build a Lambda function that finds stale EBS snapshots and deletes them automatically on a schedule. It's a real task DevOps engineers do, and a solid project to put on your résumé.</p>
+  </header>
+
+  <div class="xref-box"><div>This project builds on <a href="19-lambda.html">Lesson 19: Lambda</a> (functions, handler, execution role, triggers). For reading the bill, Cost Explorer, budgets and tagging, see <a href="36-reduce-aws-bill.html">Lesson 36: Reducing Your AWS Bill</a>.</div></div>
+
+  <h2>Why cost optimization matters</h2>
+  <p>Companies, especially startups and mid-size firms, move to the cloud for two main reasons:</p>
+  <ol>
+    <li><b>Less overhead.</b> No data centre to build, no servers to buy, no team needed just to keep hardware running.</li>
+    <li><b>Lower cost.</b> Pay only for what you use instead of buying servers up front.</li>
+  </ol>
+  <p>The second promise only holds if the cloud is <b>used efficiently</b>. Anyone with the right IAM permissions can create resources in seconds, and people forget to delete them. If nobody watches, the bill goes <i>up</i> after the move to cloud, which is the opposite of what the company wanted. Keeping it under control is one of a DevOps engineer's core responsibilities.</p>
+
+  <h2>Stale resources</h2>
+  <p>A <b>stale resource</b> is something someone created, stopped using, and forgot to delete, while AWS keeps charging for it. Common examples:</p>
+  <ul>
+    <li>EBS <b>volumes</b> not attached to any instance.</li>
+    <li>EBS <b>snapshots</b> of volumes that no longer exist.</li>
+    <li>S3 buckets full of data nobody reads any more.</li>
+    <li>An EKS cluster left running after a test.</li>
+    <li>An old EC2 instance still holding an Elastic IP.</li>
+  </ul>
+  <p>Large accounts use hundreds of resource types across many teams. Checking them by hand isn't realistic, so you automate it.</p>
+
+  <h3>A typical story</h3>
+  <p>First, two quick definitions:</p>
+  <ul>
+    <li>An <b>EBS volume</b> is the virtual hard disk attached to an EC2 instance.</li>
+    <li>A <b>snapshot</b> is a point-in-time backup copy of a volume. You can create a new volume from it later.</li>
+  </ul>
+  <p>Now the story. A developer launches an instance and stores important data on its volume, so every day they take a snapshot "just in case". Months later the feature is dropped. They terminate the instance, and its root volume is deleted with it. But the <b>hundreds of snapshots stay behind</b>, and AWS bills for their storage every month.</p>
+
+  <p>When a DevOps engineer finds stale resources, there are two options:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Notify</h3><p>Send an alert ("you have 120 snapshots of a deleted volume, please clean up") using an SNS topic, as covered in <a href="18-cloudwatch.html">CloudWatch &amp; SNS</a>.</p></div>
+    <div class="card"><h3>Delete</h3><p>If your team has the permission and the policy allows it, remove them automatically. This project builds the delete option.</p></div>
+  </div>
+
+  <h2>The architecture</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 230" role="img" aria-label="An EventBridge schedule triggers a Lambda function written in Python with boto3. Its IAM role allows describing snapshots and volumes and deleting snapshots. The function lists snapshots, checks their volumes, and deletes stale snapshots.">
+      <defs><marker id="arr20" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-purple" x="10" y="62" width="145" height="60" rx="8"/>
+      <text class="s-text-b" x="82" y="88" text-anchor="middle">EventBridge</text>
+      <text class="s-text-s" x="82" y="108" text-anchor="middle">schedule: daily</text>
+      <path class="s-line" d="M155 92 H192" marker-end="url(#arr20)"/>
+      <rect class="s-ink" x="195" y="52" width="160" height="80" rx="10"/>
+      <text class="s-text-w" x="275" y="86" text-anchor="middle">Lambda</text>
+      <text class="s-text-w" x="275" y="108" text-anchor="middle" style="font-weight:400;font-size:12px">Python + boto3</text>
+      <rect class="s-box2" x="195" y="160" width="160" height="56" rx="8"/>
+      <text class="s-text-b" x="275" y="182" text-anchor="middle">IAM role</text>
+      <text class="s-text-s" x="275" y="202" text-anchor="middle">Describe* + DeleteSnapshot</text>
+      <path class="s-dash" d="M275 160 V136"/>
+      <path class="s-line" d="M355 72 C 380 72, 380 36, 407 36" marker-end="url(#arr20)"/>
+      <path class="s-line" d="M355 92 H407" marker-end="url(#arr20)"/>
+      <path class="s-line-o" d="M355 112 C 380 112, 380 150, 407 150" marker-end="url(#arr20)"/>
+      <rect class="s-box" x="410" y="14" width="260" height="44" rx="7"/>
+      <text class="s-text" x="540" y="41" text-anchor="middle">1. describe_snapshots (own)</text>
+      <rect class="s-box" x="410" y="70" width="260" height="44" rx="7"/>
+      <text class="s-text" x="540" y="97" text-anchor="middle">2. describe_volumes (still there?)</text>
+      <rect class="s-red" x="410" y="128" width="260" height="44" rx="7"/>
+      <text class="s-text-b" x="540" y="155" text-anchor="middle">3. delete_snapshot (stale only)</text>
+      <text class="s-text-s" x="540" y="196" text-anchor="middle">all calls go to the EC2 API</text>
+    </svg>
+    <figcaption>A schedule triggers the function, and the function uses boto3 to talk to the EC2 API.</figcaption>
+  </figure>
+  <p><b>boto3</b> is the official AWS library for Python. It's the code version of the <a href="12-aws-cli.html">AWS CLI</a>: <code>ec2.describe_snapshots()</code> in boto3 is the same API call as <code>aws ec2 describe-snapshots</code>. Its documentation lists every call with the request and response format, which makes it easy to look up what you need.</p>
+
+  <h3>The rule: when is a snapshot stale?</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 230" role="img" aria-label="Decision tree: if a snapshot has no volume ID, delete it. If its volume no longer exists, delete it. If the volume exists but is not attached to an instance, delete it. Otherwise keep it.">
+      <defs><marker id="arr20b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="10" y="92" width="100" height="44" rx="8"/>
+      <text class="s-text-b" x="60" y="119" text-anchor="middle">Snapshot</text>
+      <path class="s-line" d="M110 114 H137" marker-end="url(#arr20b)"/>
+      <rect class="s-blue" x="140" y="92" width="150" height="44" rx="20"/>
+      <text class="s-text" x="215" y="119" text-anchor="middle">Has a volume ID?</text>
+      <path class="s-line" d="M290 114 H327" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="300" y="106">yes</text>
+      <rect class="s-blue" x="330" y="92" width="150" height="44" rx="20"/>
+      <text class="s-text" x="405" y="119" text-anchor="middle">Volume exists?</text>
+      <path class="s-line" d="M480 114 H517" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="490" y="106">yes</text>
+      <rect class="s-blue" x="520" y="92" width="150" height="44" rx="20"/>
+      <text class="s-text" x="595" y="119" text-anchor="middle">Attached to EC2?</text>
+      <path class="s-line" d="M595 92 V57" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="603" y="80">yes</text>
+      <rect class="s-green" x="530" y="14" width="130" height="40" rx="8"/>
+      <text class="s-text-b" x="595" y="39" text-anchor="middle">Keep</text>
+      <path class="s-line" d="M215 136 V177" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="223" y="162">no</text>
+      <path class="s-line" d="M405 136 V177" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="413" y="162">no</text>
+      <path class="s-line" d="M595 136 V177" marker-end="url(#arr20b)"/>
+      <text class="s-text-s" x="603" y="162">no</text>
+      <rect class="s-red" x="150" y="180" width="130" height="40" rx="8"/>
+      <text class="s-text-b" x="215" y="205" text-anchor="middle">Delete</text>
+      <rect class="s-red" x="340" y="180" width="130" height="40" rx="8"/>
+      <text class="s-text-b" x="405" y="205" text-anchor="middle">Delete</text>
+      <rect class="s-red" x="530" y="180" width="130" height="40" rx="8"/>
+      <text class="s-text-b" x="595" y="205" text-anchor="middle">Delete</text>
+    </svg>
+    <figcaption>The cleanup rule used in this project. Every company tunes it differently, for example by adding an age limit.</figcaption>
+  </figure>
+
+  <div class="demo" id="demo-snap">
+    <div class="demo-head">Try it: run the cleanup function</div>
+    <div class="demo-body">
+      <p>This account has a few instances, volumes and snapshots. Run the function, then terminate an instance (which deletes its root volume) and run it again. Try the safety options too.</p>
+      <div class="sc-opts">
+        <label><input type="checkbox" id="sc-age"> Only delete snapshots older than 30 days</label>
+        <label><input type="checkbox" id="sc-dry"> Dry run (report only, delete nothing)</label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="sc-run">Test (invoke function)</button>
+        <button class="btn" id="sc-term">Terminate i-test</button>
+        <button class="btn" id="sc-reset">Reset account</button>
+      </div>
+      <div class="table-wrap"><table class="snap-table" id="sc-table"></table></div>
+      <div class="output" id="sc-out">Function output appears here.</div>
+    </div>
+  </div>
+
+  <h2>Build it step by step</h2>
+  <ol class="steps">
+    <li><b>Create test resources.</b> Launch a small Ubuntu instance (it gets a root volume automatically). Go to EC2 → Volumes, find its volume, then EC2 → Snapshots → <i>Create snapshot</i> from that volume.</li>
+    <li><b>Create the function.</b> Lambda → <i>Create function</i> → author from scratch, name <code>cost-optimization-ebs-snapshot</code>, runtime Python, default execution role.</li>
+    <li><b>Add the code</b> (below), click <b>Deploy</b>, then create a test event (any name; you're invoking it by hand) and click <b>Test</b>.</li>
+    <li><b>Raise the timeout.</b> The first test likely fails. The default timeout is <b>3 seconds</b>, which is too short for API calls across the account. Configuration → General configuration → set about <b>10 seconds</b>. Keep it as low as works, because run time is part of what you pay.</li>
+    <li><b>Grant permissions.</b> The next error is <i>UnauthorizedOperation … DescribeSnapshots</i>. The function's execution role can only write logs. Open Configuration → Permissions → the role, then <i>Add permissions → Create inline policy</i> (searching the managed policies for "snapshot" finds nothing useful). Allow exactly what the code needs:
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "ec2:DescribeSnapshots",
+      "ec2:DescribeVolumes",
+      "ec2:DeleteSnapshot"
+    ],
+    "Resource": "*"
+  }]
+}</code></pre>
+      Granting <code>AmazonEC2FullAccess</code> would be quicker, but it breaks <a href="03-iam.html">least privilege</a>. If your version of the code also looks up instances, add <code>ec2:DescribeInstances</code>. A missing permission shows up as another <i>Unauthorized</i> error naming the exact action, so just add it. New permissions can take a moment to apply; wait and test again.</li>
+    <li><b>Test: nothing should be deleted.</b> The snapshot's volume still exists and is attached to a running instance.</li>
+    <li><b>Make it stale.</b> Terminate the instance; its root volume is deleted with it. Test again: the log says the snapshot was deleted because its volume no longer exists. Then try a second case: create a 1 GB volume, <i>don't</i> attach it, snapshot it, and test. The snapshot is deleted, but the volume stays, because this function only cleans snapshots.</li>
+  </ol>
+
+  <h2>The code</h2>
+<pre><code>import os
+from datetime import datetime, timezone, timedelta
+
+import boto3
+from botocore.exceptions import ClientError
+
+ec2 = boto3.client('ec2')
+DRY_RUN = os.environ.get('DRY_RUN', 'true').lower() == 'true'
+MIN_AGE = timedelta(days=int(os.environ.get('MIN_AGE_DAYS', '0')))
+
+
+def delete(snapshot_id, reason):
+    if DRY_RUN:
+        print(f"[dry run] would delete {snapshot_id}: {reason}")
+        return
+    try:
+        ec2.delete_snapshot(SnapshotId=snapshot_id)
+        print(f"Deleted {snapshot_id}: {reason}")
+    except ClientError as e:
+        # e.g. InvalidSnapshot.InUse when an AMI still uses the snapshot
+        print(f"Could not delete {snapshot_id}: {e.response['Error']['Code']}")
+
+
+def lambda_handler(event, context):
+    # 1. Every EBS snapshot owned by this account (paginated for big accounts)
+    paginator = ec2.get_paginator('describe_snapshots')
+    for page in paginator.paginate(OwnerIds=['self']):
+        for snapshot in page['Snapshots']:
+            snapshot_id = snapshot['SnapshotId']
+            volume_id = snapshot.get('VolumeId')
+
+            # Optional safety: leave recent snapshots alone
+            if datetime.now(timezone.utc) - snapshot['StartTime'] &lt; MIN_AGE:
+                continue
+
+            # 2. No source volume recorded -&gt; stale
+            if not volume_id:
+                delete(snapshot_id, "no source volume")
+                continue
+
+            # 3. Is the source volume still there?
+            try:
+                volume = ec2.describe_volumes(VolumeIds=[volume_id])['Volumes'][0]
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'InvalidVolume.NotFound':
+                    delete(snapshot_id, f"volume {volume_id} no longer exists")
+                    continue
+                raise
+
+            # 4. Volume exists but isn't attached to any instance -&gt; stale
+            if not volume['Attachments']:
+                delete(snapshot_id, f"volume {volume_id} is not attached to any instance")</code></pre>
+  <p>How it works:</p>
+  <ul>
+    <li><code>boto3.client('ec2')</code> creates a client that talks to the EC2 API. The function's role supplies the credentials, so there are no keys in the code.</li>
+    <li><code>describe_snapshots(OwnerIds=['self'])</code> returns JSON describing <i>your</i> snapshots. Without <code>self</code> you'd also get public snapshots shared by others. The code loops over it and reads <code>SnapshotId</code> and <code>VolumeId</code>.</li>
+    <li>When a volume has been deleted, <code>describe_volumes</code> raises an <code>InvalidVolume.NotFound</code> error. The <code>try/except</code> turns that error into "this snapshot is stale".</li>
+    <li>A volume's <code>Attachments</code> list is empty when it isn't connected to any instance.</li>
+    <li><b>Environment variables</b> control behaviour without code changes. It starts with <code>DRY_RUN=true</code> (only print). Set it to <code>false</code> once you trust the output. <code>MIN_AGE_DAYS=30</code> adds the age buffer.</li>
+  </ul>
+
+  <div class="callout warn"><span class="callout-title">Watch out</span>Deleting a snapshot is permanent. Before running this in a real account: run with dry run first and read the log; agree the rules with the teams (some keep snapshots of deleted volumes on purpose as backups); add an age limit like "older than 30 days"; and consider skipping snapshots tagged e.g. <code>keep=true</code>. Snapshots used by an AMI can't be deleted until the AMI is deregistered.</div>
+  <div class="callout tip"><span class="callout-title">Tip</span>Deleting isn't the only option. Some organisations move old snapshots to the much cheaper <b>EBS Snapshots Archive</b> tier, or only <i>notify</i> owners through SNS. Pick what matches your company's policy.</div>
+
+  <h2>Run it automatically</h2>
+  <p>Lambda is event-driven, so the last step is a trigger. Create a schedule with <b>Amazon EventBridge</b> (in the console you'll find it under EventBridge → Schedules, or via CloudWatch → Events → Rules, which now opens EventBridge):</p>
+  <ul>
+    <li>Schedule type: recurring, e.g. <code>rate(1 day)</code> or the cron expression <code>cron(0 10 * * ? *)</code> (10:00 UTC daily).</li>
+    <li>Target: AWS Lambda → your function.</li>
+  </ul>
+  <p>From then on the cleanup runs every day without anyone remembering to do it. Each run's output lands in the function's CloudWatch log group.</p>
+  <div class="callout warn"><span class="callout-title">Clean up after the lab</span>Delete the test instance, volumes, snapshots, and the schedule (or disable it). Leftover lab resources are exactly the kind of waste this project is meant to catch.</div>
+
+  <h2>Going further</h2>
+  <p>Real teams write one small function per resource type instead of one giant script: unattached EBS volumes, unused Elastic IPs, idle RDS instances, old S3 data, forgotten EKS clusters. They all follow the same pattern: <i>list → filter by a rule → notify or delete → run on a schedule</i>.</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Describe it like this: "I built a cost-optimization Lambda in Python with boto3. EventBridge triggers it daily; it lists our EBS snapshots and deletes those whose source volume was deleted or is not attached to any instance, with an age buffer and dry-run mode. Its IAM role has only DescribeSnapshots, DescribeVolumes and DeleteSnapshot." Then mention a problem you hit, such as the 3-second default timeout or missing permissions.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">An instance was terminated and its root volume deleted, but its daily snapshots remain. What happens on your bill?</div>
+    <div class="opts"><button>Nothing; snapshots are free once the volume is gone</button><button>You keep paying for the snapshot storage until they're deleted</button><button>AWS deletes them automatically after 30 days</button></div>
+    <div class="explain">Snapshots are billed separately from volumes and stay until someone deletes them. That's exactly what makes them stale.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">The function fails with "UnauthorizedOperation … ec2:DescribeVolumes". What's the right fix?</div>
+    <div class="opts"><button>Attach AdministratorAccess to the role</button><button>Put your access keys in the code</button><button>Add <code>ec2:DescribeVolumes</code> to the function's execution role</button></div>
+    <div class="explain">Grant exactly the missing action to the execution role (least privilege). Never embed access keys in Lambda code.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">What's the best way to make the cleanup run every day?</div>
+    <div class="opts"><button>An EventBridge schedule that targets the function</button><button>Keep an EC2 instance running that clicks Test</button><button>Set the Lambda timeout to 24 hours</button></div>
+    <div class="explain">A scheduled EventBridge rule is the event that triggers the function. (Lambda timeouts max out at 15 minutes anyway.)</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>The cloud only saves money if it's used efficiently. Finding <b>stale resources</b> is a core DevOps responsibility.</li>
+      <li>Snapshots of deleted or unattached volumes are classic waste: AWS keeps billing until they're deleted.</li>
+      <li>The pattern: <b>EventBridge schedule → Lambda (Python + boto3) → describe → filter → delete or notify</b>.</li>
+      <li>Give the execution role only the actions it needs, and raise the 3-second default timeout.</li>
+      <li>Be careful with deletes: dry run first, add an age buffer, respect tags and team policies, and clean up lab resources.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var table = document.getElementById("sc-table"), out = document.getElementById("sc-out");
+  var ageEl = document.getElementById("sc-age"), dryEl = document.getElementById("sc-dry");
+  var PRICE = 0.05; // approx $ per GB-month, standard snapshot storage
+  var world;
+
+  function reset() {
+    world = {
+      instances: { "i-web": "running", "i-test": "running" },
+      volumes: { "vol-A": "i-web", "vol-B": "i-test", "vol-C": null },
+      snaps: [
+        { id: "snap-01", vol: "vol-A", age: 3, gb: 8 },
+        { id: "snap-02", vol: "vol-A", age: 40, gb: 8 },
+        { id: "snap-03", vol: "vol-B", age: 10, gb: 20 },
+        { id: "snap-04", vol: "vol-B", age: 45, gb: 20 },
+        { id: "snap-05", vol: "vol-C", age: 60, gb: 50 },
+        { id: "snap-06", vol: "vol-D", age: 90, gb: 100 },
+        { id: "snap-07", vol: null, age: 5, gb: 30 }
+      ]
+    };
+    world.snaps.forEach(function (s) { s.result = null; s.why = ""; });
+    document.getElementById("sc-term").disabled = false;
+    out.className = "output"; out.textContent = "Function output appears here.";
+    render();
+  }
+
+  function volDesc(v) {
+    if (!v) return "(none)";
+    if (!(v in world.volumes)) return v + " (deleted)";
+    var inst = world.volumes[v];
+    return inst ? v + " → " + inst : v + " (not attached)";
+  }
+
+  function render() {
+    var h = "<tr><th>Snapshot</th><th>Source volume</th><th>Age</th><th>Result</th></tr>";
+    world.snaps.forEach(function (s) {
+      var badge = '<span class="badge">not checked</span>';
+      if (s.result === "keep") badge = '<span class="badge keep">Kept</span>';
+      if (s.result === "del") badge = '<span class="badge del">Deleted</span>';
+      if (s.result === "would") badge = '<span class="badge would">Would delete</span>';
+      if (s.result === "young") badge = '<span class="badge">Skipped</span>';
+      h += '<tr class="' + (s.result === "del" ? "del" : "") + '"><td><code>' + s.id + '</code><span class="why">' + s.gb + ' GB</span></td><td><code>' + volDesc(s.vol) + '</code></td><td>' + s.age + 'd</td><td>' + badge + (s.why ? '<span class="why">' + s.why + '</span>' : '') + '</td></tr>';
+    });
+    table.innerHTML = h;
+  }
+
+  function run() {
+    var minAge = ageEl.checked ? 30 : 0, dry = dryEl.checked;
+    var lines = [], freed = 0, n = 0;
+    world.snaps.forEach(function (s) {
+      if (s.result === "del") return;
+      var reason = null;
+      if (s.age < minAge) { s.result = "young"; s.why = "younger than 30 days"; return; }
+      if (!s.vol) reason = "no source volume";
+      else if (!(s.vol in world.volumes)) reason = "volume " + s.vol + " no longer exists";
+      else if (!world.volumes[s.vol]) reason = "volume " + s.vol + " is not attached to any instance";
+      if (!reason) { s.result = "keep"; s.why = "volume in use by " + world.volumes[s.vol]; return; }
+      s.why = reason; n++; freed += s.gb;
+      if (dry) { s.result = "would"; lines.push("[dry run] would delete " + s.id + ": " + reason); }
+      else { s.result = "del"; lines.push("Deleted " + s.id + ": " + reason); }
+    });
+    if (!lines.length) lines.push("No stale snapshots found. Nothing to do.");
+    var saving = (freed * PRICE).toFixed(2);
+    lines.push((dry ? "Dry run: " : "") + n + " stale snapshot(s), " + freed + " GB, roughly $" + saving + "/month in storage " + (dry ? "could be saved." : "saved."));
+    out.className = "output " + (n ? (dry ? "" : "ok") : "");
+    out.textContent = lines.join("\n");
+    out.style.whiteSpace = "pre-wrap";
+    render();
+  }
+
+  document.getElementById("sc-run").addEventListener("click", run);
+  document.getElementById("sc-reset").addEventListener("click", reset);
+  document.getElementById("sc-term").addEventListener("click", function () {
+    delete world.instances["i-test"];
+    delete world.volumes["vol-B"]; // root volume is deleted on termination
+    world.snaps.forEach(function (s) { if (s.result !== "del") { s.result = null; s.why = ""; } });
+    this.disabled = true;
+    out.className = "output";
+    out.textContent = "i-test terminated. Its root volume vol-B was deleted with it, but snap-03 and snap-04 are still there (and still billed). Run the function again.";
+    render();
+  });
+  reset();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reducing Your AWS Bill · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="36">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Reducing Your AWS Bill</h1>
+    <p class="lead">A surprise bill usually means a resource you forgot to delete, often in a region you weren't looking at. Here you'll learn how to read the bill, find every running resource in every region, set a budget that emails you before things get expensive, and the team habits that keep costs down.</p>
+  </header>
+
+  <h2>Why bills surprise people</h2>
+  <p>You can't get your cloud bill to exactly $0 while you're learning. Every time you create resources, AWS charges for them. What you <em>can</em> do is keep the bill small and predictable.</p>
+  <p>The usual story goes like this:</p>
+  <ol class="steps">
+    <li>You follow a tutorial and click through the console (the AWS website) to build something.</li>
+    <li>You "delete everything" when you're done, but you miss one piece, like a NAT gateway or an EKS cluster.</li>
+    <li>A week or a month later, AWS emails you a bill. That's when you find out something is still running.</li>
+  </ol>
+  <p>Cleaning up by hand in the console is easy to get wrong. Resources are spread over many pages and many <a href="02-intro-to-aws.html">regions</a>, and some are hidden behind others. The four habits below fix that.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 220" role="img" aria-label="Cost control loop: read the bill, find resources in all regions, clean up, and guard with budgets, then repeat">
+      <defs><marker id="arr36" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-blue" x="10" y="30" width="148" height="92" rx="10"/>
+      <text class="s-text-b" x="84" y="58" text-anchor="middle">1. Read</text>
+      <text class="s-text-s" x="84" y="80" text-anchor="middle">Bills page &amp;</text>
+      <text class="s-text-s" x="84" y="98" text-anchor="middle">Cost Explorer</text>
+      <rect class="s-purple" x="182" y="30" width="148" height="92" rx="10"/>
+      <text class="s-text-b" x="256" y="58" text-anchor="middle">2. Find</text>
+      <text class="s-text-s" x="256" y="80" text-anchor="middle">Tag Editor,</text>
+      <text class="s-text-s" x="256" y="98" text-anchor="middle">all regions</text>
+      <rect class="s-red" x="354" y="30" width="148" height="92" rx="10"/>
+      <text class="s-text-b" x="428" y="58" text-anchor="middle">3. Clean up</text>
+      <text class="s-text-s" x="428" y="80" text-anchor="middle">delete, or</text>
+      <text class="s-text-s" x="428" y="98" text-anchor="middle">IaC destroy</text>
+      <rect class="s-green" x="526" y="30" width="148" height="92" rx="10"/>
+      <text class="s-text-b" x="600" y="58" text-anchor="middle">4. Guard</text>
+      <text class="s-text-s" x="600" y="80" text-anchor="middle">Budgets email</text>
+      <text class="s-text-s" x="600" y="98" text-anchor="middle">at 85% / 100%</text>
+      <path class="s-line" d="M158 76 H180" marker-end="url(#arr36)"/>
+      <path class="s-line" d="M330 76 H352" marker-end="url(#arr36)"/>
+      <path class="s-line" d="M502 76 H524" marker-end="url(#arr36)"/>
+      <path class="s-line-o" d="M600 122 V178 H84 V124" marker-end="url(#arr36)"/>
+      <text class="s-text-s" x="342" y="200" text-anchor="middle">an alert email starts the loop again</text>
+    </svg>
+    <figcaption>The cost-control loop. Budgets warn you, and the bill and Tag Editor show you what to delete.</figcaption>
+  </figure>
+
+  <h2>1. Read the bill</h2>
+  <p>Open <b>Billing and Cost Management</b> in the console. The home page shows your <b>month-to-date cost</b>, the total so far this month. Beginners often stop at that one graph, but it doesn't tell you <em>what</em> is costing money. Two places do:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Bills</h3><p>Lists this month's charges <b>by service</b> (EC2, EKS, VPC…), and inside each service <b>by region</b>. This is the quickest way to answer "who is charging me, and where?"</p></div>
+    <div class="card"><h3>Cost Explorer</h3><p>Charts your costs over time. Group by <b>Service</b> or <b>Region</b> to see which one jumped. It's useful for spotting trends over several months.</p></div>
+  </div>
+  <div class="callout tip"><span class="callout-title">Tip</span>NAT gateway charges are listed under the <b>VPC</b> or <b>EC2</b> service, not under a service called "NAT". If "VPC" shows a cost you didn't expect, a NAT gateway or a public IPv4 address is usually the reason.</div>
+
+  <h2>2. Find every resource, in every region</h2>
+  <p>The console only shows one region at a time. If you built something in <code>us-east-1</code> and are now looking at <code>ap-south-1</code>, the forgotten resource is simply not on your screen. You need a view that covers all regions.</p>
+
+  <h3>Tag Editor (console)</h3>
+  <p><b>Tag Editor</b> is part of the <b>Resource Groups &amp; Tag Editor</b> service. It is meant for adding tags, but it's also the easiest way to list everything you own:</p>
+  <ol class="steps">
+    <li>Open <b>Resource Groups &amp; Tag Editor → Tag Editor</b>.</li>
+    <li><b>Regions:</b> choose <b>All regions</b>.</li>
+    <li><b>Resource types:</b> choose <b>All supported resource types</b>. Tag Editor doesn't support all 200+ AWS services, but it does cover the common ones that usually cost money.</li>
+    <li>Click <b>Search resources</b>. You get one list of everything, with its region.</li>
+  </ol>
+  <p>The list will include many things that are <b>free</b>, such as IAM users, security groups, and the default VPC. A VPC by itself costs nothing. The paid parts are what you attach to it, like a NAT gateway, a public IPv4 address, or EC2 instances. Look for the paid items and delete those.</p>
+
+  <div class="callout warn"><span class="callout-title">Watch out</span>Deleting in the console often fails with a <b>dependency</b> error, for example "this VPC still has a NAT gateway". That's useful, because it shows you what depends on what. Delete the dependent resource first, then try again.</div>
+
+  <div class="callout tip"><span class="callout-title">Beginner rule</span>Use <b>one region</b> for all your practice work. Once you pick a single region in Tag Editor, the list gets much shorter and nothing hides in another region. <b>AWS Resource Explorer</b> is another option: once it's turned on, it can search resources across all regions from one search box.</div>
+
+  <h3>The same thing from the CLI</h3>
+  <p>If you prefer the terminal, set up the <a href="12-aws-cli.html">AWS CLI</a> with <code>aws configure</code> using access keys from an IAM user. Don't create access keys for the root user. Then use the Resource Groups Tagging API:</p>
+<pre><code># everything in one region
+aws resourcegroupstaggingapi get-resources --region ap-south-1
+
+# save it to a file so you can search it
+aws resourcegroupstaggingapi get-resources --region ap-south-1 &gt; resources.json
+
+# loop over several regions
+for r in ap-south-1 us-east-1; do
+  echo "== $r =="
+  aws resourcegroupstaggingapi get-resources --region "$r" \
+    --query 'ResourceTagMappingList[].ResourceARN' --output text
+done</code></pre>
+  <div class="callout"><span class="callout-title">Note</span>This API returns resources that are tagged, or were tagged in the past. If a resource has never had a tag, it may not appear. Use Tag Editor or the Bills page to double-check. This is one more reason to tag everything (see best practices below).</div>
+
+  <h2>3. Try it: hunt for forgotten resources</h2>
+  <div class="demo" id="demo-hunt">
+    <div class="demo-head">Try it: forgotten-resource hunt + budget alerts</div>
+    <div class="demo-body">
+      <p>This is a pretend account left over from a few tutorials. Pick a region and click <b>Search resources</b>, like in Tag Editor. Tick the resources you'd delete. The budget meter always counts <b>all regions</b>, because so does your bill. Prices are rough monthly estimates.</p>
+      <div class="row">
+        <label for="h-region" style="font-weight:600">Region</label>
+        <select id="h-region">
+          <option value="all">All regions</option>
+          <option value="us-east-1">us-east-1</option>
+          <option value="ap-south-1">ap-south-1</option>
+          <option value="eu-west-1">eu-west-1</option>
+        </select>
+        <button class="btn primary" id="h-search">Search resources</button>
+      </div>
+      <div id="h-list" style="margin-top:12px"></div>
+      <div class="row" style="margin-top:14px;align-items:center">
+        <label for="h-budget" style="font-weight:600">Monthly budget $</label>
+        <input type="number" id="h-budget" value="10" min="1" step="1" style="width:90px">
+      </div>
+      <label for="h-day" style="display:block;margin-top:10px;font-weight:600">Day of month: <span id="h-dayv">20</span></label>
+      <input type="range" id="h-day" min="1" max="30" value="20">
+      <div style="margin-top:10px;height:18px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border);position:relative;overflow:hidden">
+        <div id="h-bar" style="height:100%;width:0;background:var(--green);transition:width .2s"></div>
+        <div style="position:absolute;top:0;bottom:0;left:85%;border-left:2px dashed var(--text-2)" title="85%"></div>
+      </div>
+      <div class="output" id="h-out">Search to see resources.</div>
+    </div>
+  </div>
+
+  <h2>4. Guard your wallet with AWS Budgets</h2>
+  <p>Cleaning up fixes today's problem. A <b>budget</b> warns you about tomorrow's. In <b>Billing and Cost Management → Budgets</b>:</p>
+  <ul>
+    <li><b>Zero spend budget</b> emails you as soon as you spend even a cent. That sounds safe, but once you're learning real services (an EKS cluster is never free), it just sends a lot of noise.</li>
+    <li><b>Monthly cost budget</b> is the practical choice. Set an amount, such as <b>$10</b>, and an email address to notify.</li>
+  </ul>
+  <p>With the monthly cost budget template, AWS doesn't wait until you've already gone over. It emails you:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Alert</th><th>For a $10 budget</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Actual spend reaches 85%</td><td>$8.50</td><td>Early warning: go and check what's running.</td></tr>
+      <tr><td>Actual spend reaches 100%</td><td>$10.00</td><td>You've hit your limit.</td></tr>
+      <tr><td>Forecasted spend reaches 100%</td><td>predicted ≥ $10</td><td>At the current rate, you'll go over by the end of the month.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn"><span class="callout-title">Watch out</span>A budget <b>only sends alerts</b>. It does not stop or delete anything. You still have to act on the email. (Budgets can be set up with <em>budget actions</em> that apply restrictions, but that's an advanced option.)</div>
+  <p>In a company, the same feature lets you set a budget per team or per project. You can also schedule <b>budget reports</b> that email a regular summary to managers. DevOps and SRE engineers who look after cloud costs set these up as a matter of routine.</p>
+
+  <h2>Best practices for teams</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Infrastructure as Code, not clicks</h3><p>Build resources with <a href="26-terraform.html">Terraform</a>, <a href="13-cloudformation.html">CloudFormation</a> or the AWS CDK, not by hand in the console. Then <code>terraform destroy</code> (or deleting the stack) removes <em>everything</em> it created, in the right order. There are no forgotten NAT gateways and no dependency puzzles to solve.</p></div>
+    <div class="card"><h3>Least privilege</h3><p>Give people only the access they need (<a href="03-iam.html">IAM</a>). A new developer usually needs read access, not permission to create EKS clusters or IAM users. When they need a resource, they ask the DevOps team or run an approved pipeline (for example, a Jenkins job that can only create an EC2 instance).</p></div>
+    <div class="card"><h3>Tag everything</h3><p>Add tags such as <code>owner</code>, <code>project</code> and <code>env</code> to every resource. Tag Editor and the billing tools can then filter by tag, so you can see which team or project each cost belongs to.</p></div>
+    <div class="card"><h3>Automate stale-resource cleanup</h3><p>Unused EBS volumes, snapshots, FSx file systems and idle EC2 instances add up. A scheduled Lambda function can find them and either email you (SNS) or delete them. That's covered in <a href="20-cost-optimization.html">Lesson 20</a>. <a href="27-aws-config.html">AWS Config</a> rules can flag them too.</p></div>
+  </div>
+  <p>Done well, cost optimization can save a large share of what many companies spend, because stale resources are very common.</p>
+
+  <div class="callout tip"><span class="callout-title">Got a bill you can't pay?</span>If you're a learner and genuinely forgot to delete something, contact <b>AWS Support</b>. Explain that you're learning and what happened. AWS often waives one-time charges for genuine cases. Don't ignore the bill or try to get around it with new accounts and cards.</div>
+
+  <div class="callout"><span class="callout-title">Note</span>Azure's <em>resource groups</em> make cleanup simpler: you delete the group and everything inside it goes too. On AWS, IaC stacks are the closest equivalent. That's another reason to use them.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your bill shows EC2 charges, but the EC2 console looks empty. What's the most likely reason?</div>
+    <div class="opts"><button>AWS made a billing mistake</button><button>Stopped instances are always billed twice</button><button>The instance is running in a different region from the one you're viewing</button></div>
+    <div class="explain">The console shows one region at a time. Use the Bills page (by region) or Tag Editor with "All regions" to find it.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You create a $10 monthly cost budget. What happens when spending reaches $10?</div>
+    <div class="opts"><button>You get an email alert. Resources keep running</button><button>AWS automatically stops all your resources</button><button>Your account is suspended</button></div>
+    <div class="explain">Budgets notify you (at 85%, 100% and a forecast of 100%). They don't shut anything down unless you set up budget actions yourself.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">Which habit best prevents "I deleted the VPC but forgot the NAT gateway"?</div>
+    <div class="opts"><button>Using the root user for everything</button><button>Creating resources with IaC and removing them with <code>terraform destroy</code></button><button>Using a zero spend budget</button></div>
+    <div class="explain">IaC tracks everything it created and deletes all of it in the correct dependency order.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Use the <b>Bills</b> page and <b>Cost Explorer</b> to see costs <em>by service and region</em>. The month-to-date total alone doesn't tell you much.</li>
+      <li><b>Tag Editor</b> with <b>All regions + All supported resource types</b> lists your resources in one place. From the CLI, use <code>aws resourcegroupstaggingapi get-resources</code>.</li>
+      <li>Learners: stick to <b>one region</b>. Many items (IAM users, security groups, a plain VPC) are free. NAT gateways, EKS, EC2, load balancers and IPs are not.</li>
+      <li>Create a <b>monthly cost budget</b> to get emails at 85%, 100% and when the forecast passes 100%. Budgets alert you but don't stop anything.</li>
+      <li>Team habits: <b>IaC</b>, <b>least privilege</b>, <b>tagging</b>, and <b>automated cleanup</b> of stale resources.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var R = [
+    { t: "EKS cluster (control plane)", r: "us-east-1", c: 73.00 },
+    { t: "EC2 t3.medium (EKS node)", r: "us-east-1", c: 30.37 },
+    { t: "NAT gateway", r: "us-east-1", c: 32.85 },
+    { t: "Default VPC", r: "us-east-1", c: 0 },
+    { t: "Security group", r: "us-east-1", c: 0 },
+    { t: "IAM user", r: "global", c: 0 },
+    { t: "EC2 t3.micro", r: "ap-south-1", c: 8.18 },
+    { t: "EBS volume 30 GB (unattached)", r: "ap-south-1", c: 2.40 },
+    { t: "Elastic IP (not attached)", r: "ap-south-1", c: 3.65 },
+    { t: "S3 bucket (tiny)", r: "ap-south-1", c: 0.02 },
+    { t: "Application Load Balancer", r: "eu-west-1", c: 16.43 },
+    { t: "RDS db.t3.micro", r: "eu-west-1", c: 13.14 },
+    { t: "EBS snapshot 20 GB", r: "eu-west-1", c: 1.00 }
+  ];
+  var deleted = {};
+  var $ = function (id) { return document.getElementById(id); };
+  var list = $("h-list"), out = $("h-out"), bar = $("h-bar");
+  var searched = false;
+
+  function money(x) { return "$" + x.toFixed(2); }
+
+  function renderList() {
+    var reg = $("h-region").value;
+    list.innerHTML = "";
+    var shown = R.filter(function (x) { return reg === "all" || x.r === reg || x.r === "global"; });
+    shown.forEach(function (x) {
+      var i = R.indexOf(x);
+      var row = document.createElement("label");
+      row.style.cssText = "display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--border);font-size:14px;cursor:pointer";
+      if (deleted[i]) row.style.opacity = ".5";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = !!deleted[i];
+      cb.setAttribute("aria-label", "Delete " + x.t);
+      cb.addEventListener("change", function () { deleted[i] = cb.checked; renderList(); update(); });
+      var name = document.createElement("span");
+      name.style.flex = "1";
+      name.innerHTML = (deleted[i] ? "<s>" : "") + x.t + (deleted[i] ? "</s>" : "") +
+        '<br><small style="color:var(--text-2)">' + x.r + "</small>";
+      var cost = document.createElement("span");
+      cost.style.cssText = "font-weight:700;white-space:nowrap;color:" + (x.c > 0 ? "var(--red)" : "var(--green)");
+      cost.textContent = x.c > 0 ? money(x.c) + "/mo" : "Free";
+      row.appendChild(cb); row.appendChild(name); row.appendChild(cost);
+      list.appendChild(row);
+    });
+    var hidden = R.filter(function (x, i) { return shown.indexOf(x) < 0 && x.c > 0 && !deleted[i]; }).length;
+    if (hidden) {
+      var p = document.createElement("p");
+      p.style.cssText = "margin:8px 0 0;font-size:14px;color:var(--text-2)";
+      p.textContent = "⚠ " + hidden + " paid resource(s) in other regions are not shown with this filter, but they're still on your bill.";
+      list.appendChild(p);
+    }
+  }
+
+  function update() {
+    var day = +$("h-day").value;
+    $("h-dayv").textContent = day;
+    var budget = Math.max(1, +$("h-budget").value || 10);
+    var monthly = 0;
+    R.forEach(function (x, i) { if (!deleted[i]) monthly += x.c; });
+    var actual = monthly * day / 30;
+    var pct = actual / budget * 100;
+    bar.style.width = Math.min(100, pct) + "%";
+    bar.style.background = pct >= 100 ? "var(--red)" : pct >= 85 ? "var(--orange)" : "var(--green)";
+    var alerts = [];
+    if (actual >= budget * 0.85) alerts.push("📧 Actual spend reached 85% (" + money(budget * 0.85) + ")");
+    if (actual >= budget) alerts.push("📧 Actual spend reached 100% (" + money(budget) + ")");
+    if (monthly >= budget) alerts.push("📧 Forecast: you'll reach about " + money(monthly) + " this month");
+    var html = "<b>Spent so far (day " + day + "):</b> " + money(actual) +
+      " &nbsp;·&nbsp; <b>Forecast for the month:</b> " + money(monthly) + "<br>";
+    html += alerts.length ? alerts.join("<br>") : "✅ No budget alerts. You're comfortably under " + money(budget) + ".";
+    if (!searched) html += "<br><small>Click <b>Search resources</b> to find what's costing money.</small>";
+    out.innerHTML = html;
+    out.className = "output " + (alerts.length ? "bad" : "ok");
+  }
+
+  $("h-search").addEventListener("click", function () { searched = true; renderList(); update(); });
+  $("h-region").addEventListener("change", function () { if (searched) renderList(); });
+  $("h-day").addEventListener("input", update);
+  $("h-budget").addEventListener("input", update);
+  update();
+})();
+</script>
+</body>
+</html>

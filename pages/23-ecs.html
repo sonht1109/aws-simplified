@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECS: Running Containers · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="23">
+<main class="wrap">
+  <header class="page-head">
+    <h1>ECS: Running Containers</h1>
+    <p class="lead">Running one container is easy. Keeping hundreds of them healthy, scaled and reachable is the hard part. This lesson explains why container orchestration exists, how Amazon ECS works (clusters, task definitions, tasks, services), Fargate vs EC2, and the popular interview question: ECS vs EKS vs Kubernetes.</p>
+  </header>
+
+  <div class="xref-box"><div>New to containers and images? Start with the quick primer in <a href="22-ecr.html">Lesson 22: ECR</a>. This lesson also pulls its image from ECR.</div></div>
+
+  <h2>Why isn't Docker alone enough?</h2>
+  <p>Say you install Docker on a virtual machine and run your app as container <code>c1</code>. It works, but in production you quickly hit three problems:</p>
+  <div class="grid-2">
+    <div class="card"><h3>1. No auto-healing</h3><p>Containers are <strong>ephemeral</strong> (short-lived): they can die from a crash, running out of memory, a bad deploy, or someone deleting them by mistake. Plain Docker won't bring them back, so users see downtime.</p></div>
+    <div class="card"><h3>2. No auto-scaling</h3><p>On a normal day you get 100 requests. During a festival sale you get 10,000. One container can't cope, and plain Docker won't add more copies for you.</p></div>
+    <div class="card"><h3>3. Changing addresses</h3><p>Even if you restart a container by hand, it usually comes back with a <strong>new IP address</strong> (e.g. 172.16.3.4 becomes 172.16.3.9). Anything calling the old IP breaks.</p></div>
+  </div>
+  <p>A <strong>container orchestrator</strong> solves these. It watches your containers and restarts failed ones (auto-healing), adds or removes copies with demand (auto-scaling), and gives a stable address in front of changing containers (service discovery and load balancing). Orchestration is what took containers from "works in dev" to "safe in production".</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A restaurant manager. Cooks (containers) may go home sick or get overwhelmed at dinner rush. The manager notices, calls in replacements, adds extra cooks at peak time, and customers always order at the same counter no matter which cook is working.</div>
+
+  <h2>The orchestration landscape</h2>
+  <ul>
+    <li><strong>Kubernetes</strong> is the open-source leader. Many companies sell their own "distribution" of it, just as Ubuntu and Fedora are distributions of Linux: Red Hat <strong>OpenShift</strong> (enterprise support and security), <strong>Rancher</strong>, and managed cloud versions like AWS <strong>EKS</strong>, Azure <strong>AKS</strong> and Google <strong>GKE</strong>.</li>
+    <li><strong>Non-Kubernetes orchestrators</strong> also exist: Docker Swarm, Apache Mesos, and AWS's own <strong>ECS</strong>.</li>
+  </ul>
+  <p>AWS built ECS (Elastic Container Service) to be simpler than Kubernetes. It doesn't use Kubernetes concepts like pods or deployments. It has its own: <strong>clusters, task definitions, tasks and services</strong>. It's also <strong>proprietary</strong>: it only runs on AWS.</p>
+
+  <h2>How ECS is organised</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 330" role="img" aria-label="ECS structure: a task definition blueprint creates tasks; a service keeps the desired number of tasks running behind a load balancer inside a cluster, on Fargate or EC2 capacity">
+      <defs><marker id="arr23" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-purple" x="14" y="40" width="150" height="110" rx="8"/>
+      <text class="s-text-b" x="89" y="66" text-anchor="middle">Task definition</text>
+      <text class="s-text-s" x="89" y="88" text-anchor="middle">image, CPU, memory,</text>
+      <text class="s-text-s" x="89" y="104" text-anchor="middle">ports, IAM roles,</text>
+      <text class="s-text-s" x="89" y="120" text-anchor="middle">logging</text>
+      <text class="s-text-s" x="89" y="140" text-anchor="middle">(the blueprint)</text>
+      <rect class="s-box2" x="14" y="200" width="150" height="56" rx="8"/>
+      <text class="s-text-b" x="89" y="224" text-anchor="middle">Image in ECR</text>
+      <text class="s-text-s" x="89" y="243" text-anchor="middle">demo-app:latest</text>
+      <path class="s-line" d="M89 198 V152" marker-end="url(#arr23)"/>
+      <rect class="s-dash" x="200" y="20" width="486" height="300" rx="12"/>
+      <text class="s-text-b" x="216" y="44">ECS cluster</text>
+      <rect class="s-blue" x="226" y="60" width="300" height="160" rx="10"/>
+      <text class="s-text-b" x="240" y="84">Service (desired count = 3)</text>
+      <rect class="s-green" x="242" y="104" width="84" height="96" rx="8"/>
+      <text class="s-text-b" x="284" y="146" text-anchor="middle">Task</text>
+      <text class="s-text-s" x="284" y="166" text-anchor="middle">container</text>
+      <rect class="s-green" x="334" y="104" width="84" height="96" rx="8"/>
+      <text class="s-text-b" x="376" y="146" text-anchor="middle">Task</text>
+      <text class="s-text-s" x="376" y="166" text-anchor="middle">container</text>
+      <rect class="s-green" x="426" y="104" width="84" height="96" rx="8"/>
+      <text class="s-text-b" x="468" y="146" text-anchor="middle">Task</text>
+      <text class="s-text-s" x="468" y="166" text-anchor="middle">container</text>
+      <path class="s-line" d="M164 95 H224" marker-end="url(#arr23)"/>
+      <text class="s-text-s" x="194" y="86" text-anchor="middle">runs</text>
+      <rect class="s-orange-soft" x="550" y="100" width="120" height="76" rx="8"/>
+      <text class="s-text-b" x="610" y="132" text-anchor="middle">Load</text>
+      <text class="s-text-b" x="610" y="150" text-anchor="middle">balancer</text>
+      <path class="s-line" d="M548 138 H528" marker-end="url(#arr23)"/>
+      <rect class="s-box2" x="226" y="240" width="210" height="62" rx="8"/>
+      <text class="s-text-b" x="331" y="266" text-anchor="middle">Fargate</text>
+      <text class="s-text-s" x="331" y="286" text-anchor="middle">serverless, AWS runs servers</text>
+      <rect class="s-box2" x="452" y="240" width="218" height="62" rx="8"/>
+      <text class="s-text-b" x="561" y="266" text-anchor="middle">EC2 instances</text>
+      <text class="s-text-s" x="561" y="286" text-anchor="middle">your servers, your patching</text>
+      <text class="s-text-s" x="444" y="232" text-anchor="middle">capacity: pick one (or mix)</text>
+    </svg>
+    <figcaption>A task definition is the blueprint; tasks are running copies; a service keeps the right number of tasks alive and connects them to a load balancer.</figcaption>
+  </figure>
+  <div class="table-wrap"><table>
+    <tr><th>ECS term</th><th>What it is</th><th>Rough Kubernetes cousin</th></tr>
+    <tr><td><strong>Cluster</strong></td><td>A logical group where your containers run, backed by Fargate and/or EC2 capacity.</td><td>Cluster</td></tr>
+    <tr><td><strong>Task definition</strong></td><td>A JSON blueprint: which image, how much CPU/memory, which ports, environment variables, IAM roles, log settings. Versioned as "revisions".</td><td>Pod spec</td></tr>
+    <tr><td><strong>Task</strong></td><td>A running instance of a task definition: one or more containers actually running.</td><td>Pod</td></tr>
+    <tr><td><strong>Service</strong></td><td>Keeps a <em>desired count</em> of tasks running, replaces failed ones, can auto-scale and register tasks with a load balancer.</td><td>Deployment + Service</td></tr>
+  </table></div>
+  <p class="muted">Kubernetes objects (pods, deployments, services, ingress) are explained in <a href="24-eks.html">Lesson 24: EKS</a>.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>"Run task" starts a one-off task. If it dies, nothing replaces it. For a real app, create a <strong>service</strong>. That's where auto-healing and scaling come from.</div>
+
+  <h2>Fargate vs EC2 launch type</h2>
+  <p>When you create a cluster or task, you choose where the containers physically run:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Fargate (serverless)</h3><p>You only say "this task needs 0.5 vCPU and 1 GB". AWS finds the compute. There are no servers to patch, scale or monitor. Like <a href="19-lambda.html">Lambda</a>, but built for long-running containers. You pay per task for the CPU/memory it uses while running. Most teams start here.</p></div>
+    <div class="card"><h3>EC2 (servers you manage)</h3><p>ECS places tasks on EC2 instances in your cluster. You choose instance types, configure an Auto Scaling group, patch the OS and watch server health. In return you get more control: special instance types, GPUs, custom AMIs, and possibly lower cost at steady high usage.</p></div>
+  </div>
+
+  <div class="demo" id="demo-who">
+    <div class="demo-head">Try it: who manages what?</div>
+    <div class="demo-body">
+      <p>Pick a way of running containers on AWS and see which jobs land on <b>AWS</b> and which land on <b>you</b>.</p>
+      <div class="row" id="who-btns" role="group" aria-label="Platform">
+        <button class="btn" type="button" data-k="fargate" aria-pressed="true">ECS + Fargate</button>
+        <button class="btn" type="button" data-k="ecsec2" aria-pressed="false">ECS + EC2</button>
+        <button class="btn" type="button" data-k="eks" aria-pressed="false">EKS</button>
+        <button class="btn" type="button" data-k="diy" aria-pressed="false">Kubernetes on EC2 (DIY)</button>
+      </div>
+      <div id="who-list" style="margin-top:12px"></div>
+      <div class="output" id="who-out"></div>
+    </div>
+  </div>
+
+  <h2>ECS vs EKS vs Kubernetes: the interview question</h2>
+  <p>On AWS you have three main ways to orchestrate containers: <strong>ECS</strong>, <strong>EKS</strong> (managed Kubernetes), or <strong>Kubernetes you install yourself</strong> on EC2 (with tools like kubeadm or kops).</p>
+  <h3>Where ECS shines</h3>
+  <ul>
+    <li><strong>Simple:</strong> no control plane with many components to learn and run. Create a cluster, a task definition and a service, and you're live. Cluster creation with Fargate takes about a minute.</li>
+    <li><strong>Fully managed</strong>, and with Fargate there are no servers at all.</li>
+    <li><strong>Cost-effective</strong>: no Kubernetes system workloads eating resources, and no control-plane fee.</li>
+    <li><strong>Deep AWS integration</strong>: IAM roles per task, CloudWatch logs and metrics built in, load balancers, ECR.</li>
+  </ul>
+  <h3>Where ECS falls short</h3>
+  <ul>
+    <li><strong>Lock-in:</strong> ECS task definitions and services only work on AWS. Move to Azure, and you rebuild from scratch. Kubernetes manifests (pods, services, deployments, ingress) carry over to any cloud with mostly small changes. In a multi-cloud or hybrid world, that matters. (Lock-in is good for AWS, not for you.)</li>
+    <li><strong>Smaller ecosystem:</strong> Kubernetes is open source with a huge community adding features constantly. It can be <strong>extended</strong> with custom resources (CRDs) and controllers, which is how tools like Argo CD, Flux and Istio work. None of those run on ECS.</li>
+    <li><strong>Fewer advanced options</strong>: Kubernetes has hundreds of ingress controllers and many security and secret-management add-ons. ECS mainly relies on AWS's load balancers and services.</li>
+  </ul>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>ECS</th><th>EKS</th><th>DIY Kubernetes on EC2</th></tr>
+    <tr><td>Control plane</td><td>AWS (invisible)</td><td>AWS-managed Kubernetes</td><td>You</td></tr>
+    <tr><td>Learning curve</td><td>Low</td><td>High (Kubernetes)</td><td>Highest</td></tr>
+    <tr><td>Portable to other clouds</td><td>No</td><td>Mostly</td><td>Yes</td></tr>
+    <tr><td>Ecosystem/extensions</td><td>AWS only</td><td>Full Kubernetes</td><td>Full Kubernetes</td></tr>
+    <tr><td>Good fit</td><td>Startups, simple apps, AWS-only teams</td><td>Most companies running Kubernetes on AWS</td><td>Special needs, full control</td></tr>
+  </table></div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Know ECS, but lead with EKS/Kubernetes skills unless the job description says ECS: far more jobs ask for Kubernetes. A crisp answer: "ECS is simpler and tightly integrated with AWS, great for small teams. But it's AWS-only and lacks Kubernetes' ecosystem, so most organisations pick EKS for portability and extensibility."</div>
+
+  <h2>Hands-on: deploy a Flask app on ECS Fargate</h2>
+  <div class="callout warn"><span class="callout-title">Watch out: cost</span>Fargate tasks, public IPs and log storage are billed while running. Stop tasks and delete the cluster as soon as you finish.</div>
+  <ol class="steps">
+    <li><strong>Create a cluster.</strong> ECS → Clusters → Create. Name it <code>demo-ecs-cluster</code>, keep the default VPC and subnets, and choose <strong>AWS Fargate</strong> as infrastructure. (Choosing EC2 would also ask you for instance types and an Auto Scaling group.) CloudWatch monitoring is on by default.</li>
+    <li><strong>Prepare the image.</strong> The sample is a small Python Flask app listening on port <strong>3000</strong>. Build it and push it to a private ECR repository, using the login/build/tag/push flow from <a href="22-ecr.html">Lesson 22</a>. A handy shortcut builds and tags in one go:
+<pre><code>aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+docker build -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:latest .
+docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:latest</code></pre>
+    </li>
+    <li><strong>Create a task definition.</strong> Task definitions → Create new. Name it, keep launch type <strong>Fargate</strong>, OS Linux, and choose the smallest CPU/memory that fits.</li>
+    <li><strong>Pick the two IAM roles</strong> (see below). Let the console create a new <em>task execution role</em> so logs can go to CloudWatch. Leave the <em>task role</em> empty unless your code calls AWS services.</li>
+    <li><strong>Container details:</strong> name <code>example</code>, image URI <code>…/demo-app-repo:latest</code>, container port <strong>3000</strong> (HTTP). Optionally set memory soft/hard limits, similar to Kubernetes resource requests/limits. Keep "Use log collection" on with CloudWatch.</li>
+    <li><strong>Run it.</strong> Open the task definition → <strong>Deploy → Run task</strong> → choose your cluster → Create. The task goes from <em>Provisioning</em> to <em>Running</em>.</li>
+    <li><strong>Check logs.</strong> Open the task → <strong>Logs</strong> tab. These come from CloudWatch, and you'll see Flask reporting it's running on port 3000. To open the app in a browser, the task needs a public IP, and its security group must allow inbound port 3000 (see <a href="07-security-groups-nacl.html">Lesson 7</a>).</li>
+  </ol>
+  <h3>Task role vs task execution role</h3>
+  <p>These two names confuse almost everyone, and interviewers know it.</p>
+  <div class="grid-2">
+    <div class="card"><h3>Task execution role</h3><p>Used by <strong>ECS itself</strong> (the agent) to <em>start</em> your task: pull the image from ECR, send logs to CloudWatch, read secrets for environment variables.</p></div>
+    <div class="card"><h3>Task role</h3><p>Used by <strong>your application code</strong> inside the container to call AWS APIs, e.g. read from S3 or write to DynamoDB. Optional: only if your app talks to AWS.</p></div>
+  </div>
+  <div class="callout tip"><span class="callout-title">Tip</span>Good habit to mention in interviews: "I always send ECS container logs to CloudWatch. When something breaks, CloudWatch is my first stop." Logging and alarms are covered in <a href="18-cloudwatch.html">Lesson 18</a>.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your ECS container crashes at 2 a.m. Which setup automatically starts a replacement?</div>
+    <div class="opts"><button>A task started with "Run task"</button><button>Docker running on a single EC2 instance</button><button>An ECS service with a desired count</button></div>
+    <div class="explain">A service constantly compares running tasks with the desired count and replaces any that stop. A one-off task or plain Docker won't.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Your container needs to upload files to S3. Which IAM role gets the S3 permission?</div>
+    <div class="opts"><button>The task role</button><button>The task execution role</button><button>The EC2 key pair</button></div>
+    <div class="explain">The task role is for your application code's AWS calls. The execution role is for ECS itself: pulling images and shipping logs.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">Your company may move to another cloud next year. Why might that favour EKS over ECS?</div>
+    <div class="opts"><button>EKS is always cheaper</button><button>Kubernetes manifests are portable; ECS task definitions only work on AWS</button><button>ECS doesn't support load balancers</button></div>
+    <div class="explain">ECS is proprietary to AWS. Kubernetes resources carry over to AKS, GKE or self-managed clusters with mostly small changes.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Orchestrators add what plain Docker lacks: <strong>auto-healing, auto-scaling and stable networking</strong>.</li>
+      <li>ECS building blocks: <strong>cluster → task definition (blueprint) → task (running) → service (keeps N tasks alive, LB)</strong>.</li>
+      <li><strong>Fargate</strong> = serverless, nothing to manage. <strong>EC2</strong> = more control, but you manage the servers.</li>
+      <li>ECS is simple, cheap and AWS-integrated, but proprietary with a smaller ecosystem. Most organisations choose <a href="24-eks.html">EKS</a>.</li>
+      <li><strong>Execution role</strong> = ECS pulls images and writes logs. <strong>Task role</strong> = your app calls AWS.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var ROWS = [
+    { id: "cp",    label: "Control plane (scheduler, API, cluster state)" },
+    { id: "srv",   label: "Servers: provisioning and scaling capacity" },
+    { id: "os",    label: "Server OS patching and security updates" },
+    { id: "spec",  label: "Your image + task definition / pod YAML" },
+    { id: "scale", label: "How many copies of your app (desired count)" }
+  ];
+  var DATA = {
+    fargate: { m: { cp: "AWS", srv: "AWS", os: "AWS", spec: "You", scale: "You" }, note: "Least work: you only describe your containers. Great default for most apps on ECS." },
+    ecsec2:  { m: { cp: "AWS", srv: "You", os: "You", spec: "You", scale: "You" }, note: "AWS runs ECS itself, but the EC2 fleet is yours: instance types, Auto Scaling group, patching, monitoring. You gain control (GPUs, custom AMIs) and maybe cost savings." },
+    eks:     { m: { cp: "AWS", srv: "Shared", os: "Shared", spec: "You", scale: "You" }, note: "AWS runs the Kubernetes control plane. Worker capacity is shared: with Fargate or managed node groups AWS does more; with self-managed EC2 nodes you do more. See Lesson 24." },
+    diy:     { m: { cp: "You", srv: "You", os: "You", spec: "You", scale: "You" }, note: "Full control and full responsibility: installing the control plane, etcd backups, certificate renewals, upgrades and every node. Most work by far." }
+  };
+  var list = document.getElementById("who-list");
+  var out = document.getElementById("who-out");
+  var btns = document.querySelectorAll("#who-btns .btn");
+
+  function color(v) { return v === "AWS" ? "var(--green)" : (v === "You" ? "var(--orange-strong)" : "var(--blue)"); }
+  function bg(v) { return v === "AWS" ? "var(--green-soft)" : (v === "You" ? "var(--orange-soft)" : "var(--blue-soft)"); }
+
+  function show(k) {
+    var d = DATA[k], yours = 0;
+    list.innerHTML = "";
+    ROWS.forEach(function (r) {
+      var v = d.m[r.id];
+      if (v === "You") yours++;
+      var row = document.createElement("div");
+      row.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 10px;margin:5px 0;border:1px solid var(--border);border-radius:8px;background:var(--surface-2);font-size:15px";
+      var l = document.createElement("span"); l.textContent = r.label;
+      var b = document.createElement("span");
+      b.textContent = v;
+      b.style.cssText = "flex:none;font-weight:700;font-size:13px;padding:2px 10px;border-radius:999px;border:1px solid " + color(v) + ";color:" + color(v) + ";background:" + bg(v);
+      row.appendChild(l); row.appendChild(b); list.appendChild(row);
+    });
+    out.className = "output";
+    out.innerHTML = "<b>You own " + yours + " of " + ROWS.length + " jobs.</b> ";
+    out.appendChild(document.createTextNode(d.note));
+    Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-k") === k ? "true" : "false"); });
+  }
+  Array.prototype.forEach.call(btns, function (b) {
+    b.addEventListener("click", function () { show(b.getAttribute("data-k")); });
+  });
+  show("fargate");
+})();
+</script>
+</body>
+</html>

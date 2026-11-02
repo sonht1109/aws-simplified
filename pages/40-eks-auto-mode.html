@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EKS Auto Mode · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="40">
+<main class="wrap">
+  <header class="page-head">
+    <h1>EKS Auto Mode</h1>
+    <p class="lead">Running Kubernetes is easy to start and hard to keep running well: sizing nodes, scaling, patching, upgrades and cost. EKS Auto Mode hands most of that work to AWS. You'll learn which problems it solves, how it uses Karpenter to add and remove nodes, and exactly what you still manage yourself.</p>
+  </header>
+
+  <div class="xref-box"><div>This lesson assumes you know what an EKS cluster, nodes and pods are. If not, start with <a href="24-eks.html">Lesson 24: EKS</a>, and for why orchestration exists, <a href="23-ecs.html">Lesson 23</a>.</div></div>
+
+  <h2>The problems with running Kubernetes yourself</h2>
+  <p>Problems show up in two phases. <b>Day 1</b> is setting the cluster up. <b>Day 2</b> is everything after that, which never ends.</p>
+
+  <h3>Day 1: creating the cluster</h3>
+  <ul>
+    <li><b>Capacity planning:</b> how many worker nodes (the EC2 machines that run your pods): 3, 6, 10? And how big should each one be (16 CPU / 16 GB, or more)? Teams new to Kubernetes have no data to base this on.</li>
+    <li><b>Instance type:</b> EC2 has many families (general, memory-optimized, GPU…). The wrong choice hurts app performance. AI/ML workloads make this harder because you also have to pick GPU instances and use them efficiently.</li>
+    <li><b>Setup effort:</b> by hand, that means a <a href="06-vpc.html">VPC</a> with subnets, route tables, internet and NAT gateways, and then EKS, with every step checked for mistakes. With IaC such as <a href="34-eks-terraform.html">Terraform</a>, you also have to manage state files, locking, and many <code>.tf</code> files.</li>
+  </ul>
+
+  <h3>Day 2: keeping it healthy</h3>
+  <ul>
+    <li><b>Node management:</b> picture an online shop with 3 nodes on weekdays, 5 at weekends and 8 during a sale. Every scale-up means adding nodes, joining them to the cluster and spreading pods onto them. Every scale-down means <b>cordoning and draining</b> nodes (moving pods off safely) before removing them. Some teams do this every day and every night.</li>
+    <li><b>Security fixes:</b> the node operating systems need patches for vulnerabilities, all the time.</li>
+    <li><b>Version upgrades:</b> Kubernetes releases patch versions often (1.33.0 → 1.33.1 → …) and new minor versions regularly. You can't stay on one version forever.</li>
+    <li><b>Add-on compatibility:</b> after each upgrade, core components such as the <b>CNI</b> (pod networking), <b>CoreDNS</b> (in-cluster DNS) and <b>CSI drivers</b> (storage) must still be compatible.</li>
+    <li><b>Cost:</b> teams over-provision "just in case", and rarely go back to scale down or rebalance when usage drops.</li>
+  </ul>
+
+  <h2>How EKS Auto Mode solves them</h2>
+  <div class="grid-2">
+    <div class="card"><h3>One-click, ready-to-use cluster</h3><p>Choose <b>Quick configuration</b> and click create. Networking, storage drivers, a load-balancing controller, DNS and metrics come built in.</p></div>
+    <div class="card"><h3>Automatic nodes with Karpenter</h3><p>No node groups to size. Auto Mode launches the right number and <b>type</b> of nodes for your pods, and removes them when they're no longer needed.</p></div>
+    <div class="card"><h3>Patched, upgraded nodes</h3><p>Nodes run <b>Bottlerocket</b>-based AMIs (a minimal, container-focused OS) that AWS patches, tests and rolls out. Nodes are replaced regularly (never older than 21 days), so you never patch nodes by hand.</p></div>
+    <div class="card"><h3>Compatible core components</h3><p>Pod networking, DNS, storage (EBS) and load-balancer integration are built in and kept compatible by AWS when you upgrade.</p></div>
+  </div>
+
+  <h3>Karpenter in one minute</h3>
+  <p><b>Karpenter</b> is an open-source node autoscaler. AWS built it and donated it to the Kubernetes/CNCF community. Instead of scaling fixed node groups, it looks at <b>pending pods</b> (pods that can't be scheduled because no node has room), works out what they need, and launches the <b>cheapest EC2 instance that fits</b>. It also keeps checking for <b>consolidation</b>: if pods could fit on fewer or cheaper nodes, it moves them and removes the extra nodes. In Auto Mode, Karpenter is already running and managed by AWS, so you don't install or upgrade it.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 250" role="img" aria-label="Karpenter loop: pods are pending, Karpenter picks the cheapest instance that fits and launches a node, pods run, then when the workload is removed the empty node is consolidated and deleted">
+      <defs><marker id="arr40" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-red" x="10" y="30" width="150" height="90" rx="10"/>
+      <text class="s-text-b" x="85" y="62" text-anchor="middle">24 pods</text>
+      <text class="s-text-b" x="85" y="82" text-anchor="middle">Pending</text>
+      <text class="s-text-s" x="85" y="104" text-anchor="middle">helm install</text>
+      <rect class="s-orange-soft" x="190" y="30" width="150" height="90" rx="10"/>
+      <text class="s-text-b" x="265" y="62" text-anchor="middle">Karpenter</text>
+      <text class="s-text-s" x="265" y="84" text-anchor="middle">picks cheapest fit</text>
+      <text class="s-text-s" x="265" y="104" text-anchor="middle">e.g. m6a.large</text>
+      <rect class="s-green" x="370" y="30" width="150" height="90" rx="10"/>
+      <text class="s-text-b" x="445" y="62" text-anchor="middle">Node ready</text>
+      <text class="s-text-s" x="445" y="84" text-anchor="middle">pods Running</text>
+      <text class="s-text-s" x="445" y="104" text-anchor="middle">~73% CPU used</text>
+      <rect class="s-box2" x="550" y="30" width="140" height="90" rx="10"/>
+      <text class="s-text-b" x="620" y="62" text-anchor="middle">Workload</text>
+      <text class="s-text-b" x="620" y="82" text-anchor="middle">removed</text>
+      <text class="s-text-s" x="620" y="104" text-anchor="middle">helm uninstall</text>
+      <rect class="s-purple" x="250" y="160" width="230" height="70" rx="10"/>
+      <text class="s-text-b" x="365" y="190" text-anchor="middle">Empty node consolidated</text>
+      <text class="s-text-s" x="365" y="212" text-anchor="middle">Deleting → gone (stop paying)</text>
+      <path class="s-line" d="M160 75 H188" marker-end="url(#arr40)"/>
+      <path class="s-line" d="M340 75 H368" marker-end="url(#arr40)"/>
+      <path class="s-line" d="M520 75 H548" marker-end="url(#arr40)"/>
+      <path class="s-line-o" d="M620 120 V195 H482" marker-end="url(#arr40)"/>
+      <path class="s-line-o" d="M250 195 H85 V122" marker-end="url(#arr40)"/>
+      <text class="s-text-s" x="85" y="240" text-anchor="middle">next workload…</text>
+    </svg>
+    <figcaption>Auto Mode adds a right-sized node when pods are waiting and removes it once it's empty, with no human involved.</figcaption>
+  </figure>
+
+  <h2>Who manages what?</h2>
+  <p>Compare the three ways to run EKS worker nodes. <b>Self-managed nodes</b> are EC2 instances you build and join to the cluster yourself. <b>Managed node groups</b> are groups of EC2 nodes that EKS creates for you, but you still choose and size them. <b>Auto Mode</b> is described above.</p>
+
+  <div class="demo" id="demo-who">
+    <div class="demo-head">Try it: who manages what?</div>
+    <div class="demo-body">
+      <p>Pick a node option and see who's responsible for each job.</p>
+      <div class="row" id="w-modes"></div>
+      <div id="w-table" style="margin-top:12px"></div>
+      <div class="output" id="w-out"></div>
+    </div>
+  </div>
+
+  <div class="callout"><span class="callout-title">Note</span>Even with Auto Mode, <b>you</b> still own your applications: deployments, sensible CPU/memory <b>requests</b> (Karpenter sizes nodes from these), IAM permissions, and choosing <em>when</em> to upgrade the cluster's Kubernetes version. Auto Mode also charges a management fee per node on top of the normal EC2 price.</div>
+
+  <h2>Hands-on: create a cluster and watch it scale</h2>
+  <h3>1. Create the cluster</h3>
+  <ol class="steps">
+    <li>Console → <b>Elastic Kubernetes Service</b> → <b>Create cluster</b> → <b>Quick configuration (with EKS Auto Mode)</b>.</li>
+    <li>First time only: create a <b>cluster IAM role</b> and a <b>node IAM role</b> using <b>Create recommended role</b>. The wizard pre-selects EKS / EKS Auto Cluster and the right policies. You can reuse both roles for future Auto Mode clusters. (Roles are explained in <a href="03-iam.html">Lesson 3</a>.)</li>
+    <li>Click <b>Create</b>. After a few minutes the status is <b>Active</b> and the API server endpoint is shown.</li>
+  </ol>
+  <p>Look around in the console. The <b>Resources</b> tab shows system pods already running on a node that Auto Mode launched (its compute shows as <em>auto mode</em>). Default services such as <code>kubernetes</code> and the metrics service are present, and storage drivers for EBS/EFS are listed. The cluster is ready to use.</p>
+
+  <h3>2. Point kubectl at it and watch the nodes</h3>
+<pre><code>aws eks update-kubeconfig --name &lt;cluster-name&gt; --region ap-south-1
+
+# in a second terminal: live view of nodes, pods, CPU use and cost
+eks-node-viewer</code></pre>
+  <p><b>eks-node-viewer</b> is a small open-source tool from AWS Labs. It shows each node with its instance type, price, CPU use, and running and pending pods. It's the easiest way to watch Karpenter work.</p>
+
+  <h3>3. Deploy a lot of microservices</h3>
+  <p>The OpenTelemetry demo installs 20+ microservices, which is enough to make the cluster grow:</p>
+<pre><code>helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
+helm install my-otel-demo open-telemetry/opentelemetry-demo
+kubectl get pods        # most pods Pending at first…</code></pre>
+  <p>What happened:</p>
+  <ul>
+    <li>24 pods were <b>Pending</b> (only the 2 existing system pods were running).</li>
+    <li>Karpenter launched a new node and chose <b>m6a.large</b> as the best fit for those pods, with about 73% of its CPU used. It chose the instance type itself.</li>
+    <li>A minute or two later, <code>kubectl get pods</code> showed them <b>Running</b>.</li>
+  </ul>
+
+  <h3>4. Remove them and watch the cost go away</h3>
+<pre><code>helm uninstall my-otel-demo</code></pre>
+  <p>CPU use dropped to 0 and no pods were left on that node. After a few minutes the node moved to <b>Deleting</b>, and shortly afterwards it was gone. That's what makes Auto Mode cost-effective: you don't keep paying for an empty node.</p>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Delete the cluster when you're done practicing. The EKS control plane is billed per hour even with no nodes (see <a href="36-reduce-aws-bill.html">Lesson 36</a>).</div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Managed node groups vs Karpenter vs Auto Mode?" Node groups: AWS runs the node lifecycle, but <em>you</em> size them and install autoscaling and add-ons. Karpenter (self-installed): flexible, cost-aware autoscaling, but you operate it. Auto Mode: AWS runs Karpenter, patched Bottlerocket nodes and core add-ons for you, at the cost of less low-level control and a per-node fee.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">In EKS Auto Mode, what decides that a new <b>m6a.large</b> node should be launched?</div>
+    <div class="opts"><button>You, by editing the node group size</button><button>A CloudWatch alarm you created</button><button>Karpenter, based on pending pods' resource needs</button></div>
+    <div class="explain">Karpenter watches for pods that can't be scheduled and launches the cheapest instance type that fits them.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Who patches the worker node operating system in Auto Mode?</div>
+    <div class="opts"><button>AWS: it rolls out patched Bottlerocket-based AMIs and replaces nodes</button><button>You, with SSH and yum update</button><button>Nobody: Auto Mode nodes never need patches</button></div>
+    <div class="explain">AWS continuously patches, tests and rolls out the node AMIs, and nodes are replaced regularly.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">After <code>helm uninstall</code>, the node stays "Ready" for a minute and then shows "Deleting". What is this?</div>
+    <div class="opts"><button>A crash</button><button>Consolidation: Karpenter removes the empty node to save cost</button><button>A Kubernetes version upgrade</button></div>
+    <div class="explain">Once a node is empty (or its pods fit elsewhere), Karpenter consolidates it away.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Running Kubernetes means Day-1 work (sizing, instance types, setup) and Day-2 work (scaling, patching, upgrades, add-on compatibility, cost).</li>
+      <li><b>EKS Auto Mode</b> gives a ready-to-use cluster in one click, with networking, DNS, storage and load-balancer integration built in.</li>
+      <li>It uses <b>Karpenter</b> to launch the cheapest instance that fits pending pods and to <b>consolidate</b> nodes that aren't needed.</li>
+      <li>Nodes use AWS-patched <b>Bottlerocket</b> AMIs and are replaced regularly, so there's no manual node patching.</li>
+      <li>You still own your apps, pod resource requests, IAM, and when to upgrade. Managed node groups leave sizing, autoscaling and add-ons to you.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var MODES = ["Self-managed nodes", "Managed node groups", "Auto Mode"];
+  // each row: job, [who per mode], [detail per mode]  (Y = you, A = AWS, S = shared)
+  var ROWS = [
+    ["Control plane (API server, etcd)", "AAA", ["EKS runs it in every option.", "EKS runs it in every option.", "EKS runs it in every option."]],
+    ["Deciding node count & size", "YYA", ["You do the capacity planning.", "You set min/max/desired size per group.", "Karpenter sizes capacity from pod requests."]],
+    ["Choosing EC2 instance types", "YYA", ["You pick them in the launch template.", "You pick them per node group.", "Picks the cheapest type that fits the pods."]],
+    ["Launching nodes & joining the cluster", "YAA", ["You build the ASG, AMI and bootstrap.", "EKS creates and manages the ASG.", "Karpenter launches nodes on demand."]],
+    ["Autoscaling nodes up & down", "YYA", ["You install Cluster Autoscaler or Karpenter.", "You install Cluster Autoscaler or Karpenter.", "Karpenter is built in and managed."]],
+    ["Consolidating to save cost", "YYA", ["You rebalance manually or with tools.", "You rebalance manually or with tools.", "Empty or under-used nodes are removed."]],
+    ["Node OS patching & AMI updates", "YSA", ["You patch or rebuild AMIs yourself.", "AWS publishes new AMIs, you start the update.", "Patched Bottlerocket AMIs, nodes replaced regularly."]],
+    ["Core add-ons (CNI, CoreDNS, kube-proxy)", "YYA", ["You install them and keep versions compatible.", "You update the EKS add-ons after upgrades.", "Built in and kept compatible by AWS."]],
+    ["Storage & load-balancer controllers", "YYA", ["You install EBS CSI / LB Controller.", "You install EBS CSI / LB Controller.", "Built in."]],
+    ["Starting a Kubernetes version upgrade", "YYY", ["You upgrade the control plane, then the nodes.", "You upgrade the control plane, then the node groups.", "You start it. AWS then updates nodes and components."]],
+    ["Your apps, pod requests, IAM", "YYY", ["Always yours.", "Always yours.", "Always yours."]]
+  ];
+  var LABEL = { Y: "You", A: "AWS", S: "Shared" };
+  var COLOR = { Y: "var(--red)", A: "var(--green)", S: "var(--orange-strong)" };
+  var BG = { Y: "var(--red-soft)", A: "var(--green-soft)", S: "var(--orange-soft)" };
+  var modes = document.getElementById("w-modes"), table = document.getElementById("w-table"), out = document.getElementById("w-out");
+  var cur = 2;
+
+  MODES.forEach(function (m, i) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = m;
+    b.addEventListener("click", function () { cur = i; render(); });
+    modes.appendChild(b);
+  });
+
+  function render() {
+    Array.prototype.forEach.call(modes.children, function (b, i) { b.setAttribute("aria-pressed", i === cur ? "true" : "false"); });
+    var html = "", count = { Y: 0, A: 0, S: 0 };
+    ROWS.forEach(function (r) {
+      var w = r[1].charAt(cur);
+      count[w]++;
+      html += '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)">' +
+        '<span style="flex:none;min-width:58px;text-align:center;font-weight:800;font-size:13px;padding:3px 6px;border-radius:6px;border:1px solid ' + COLOR[w] + ';color:' + COLOR[w] + ';background:' + BG[w] + '">' + LABEL[w] + '</span>' +
+        '<span style="flex:1;font-size:14px"><b>' + r[0] + '</b><br><span style="color:var(--text-2)">' + r[2][cur] + '</span></span></div>';
+    });
+    table.innerHTML = html;
+    out.innerHTML = "<b>" + MODES[cur] + ":</b> AWS handles " + count.A + ", shared " + count.S + ", <b>you handle " + count.Y + "</b> of " + ROWS.length + " jobs." +
+      (cur === 2 ? "<br>Most of the node work moves to AWS. What's left is your apps and decisions." : cur === 0 ? "<br>Full control and full responsibility." : "<br>AWS runs the node lifecycle, but sizing, scaling and add-ons are still yours.");
+    out.className = "output" + (cur === 2 ? " ok" : "");
+  }
+  render();
+})();
+</script>
+</body>
+</html>

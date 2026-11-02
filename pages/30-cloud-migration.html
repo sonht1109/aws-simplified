@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Migrating Applications to AWS · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="30">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Migrating Applications to AWS</h1>
+    <p class="lead">Many companies, especially banks and large enterprises, still run on their own servers and are moving to the cloud gradually. This lesson covers how a real migration project runs (five phases), the "7 Rs" of migration strategy, how databases are moved safely, and how to talk about all of it in an interview.</p>
+  </header>
+
+  <div class="xref-box"><div>On-premises vs cloud, and why companies move, is covered in <a href="02-intro-to-aws.html">Lesson 2: Introduction to AWS</a>.</div></div>
+
+  <h2>Don't start with the 7 Rs</h2>
+  <p>Ask most candidates "how did you migrate to AWS?" and they'll reply "we used lift and shift". Anyone can read that in a blog. Interviewers want to hear <b>how the project actually ran</b>: the phases, how apps were grouped, how you checked things were working and what you improved afterwards. The 7 Rs are just one decision <i>inside</i> that process.</p>
+
+  <h2>The five phases of a migration project</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 250" role="img" aria-label="Migration phases: Prepare and Plan happen once, then Migrate and Monitor repeat for each wave of applications, and finally Optimize happens once at the end">
+      <defs><marker id="arr30" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-blue" x="10" y="70" width="110" height="64" rx="8"/>
+      <text class="s-text-b" x="65" y="98" text-anchor="middle">1 Prepare</text>
+      <text class="s-text-s" x="65" y="118" text-anchor="middle">once</text>
+      <path class="s-line" d="M120 102 H146" marker-end="url(#arr30)"/>
+      <rect class="s-blue" x="150" y="70" width="110" height="64" rx="8"/>
+      <text class="s-text-b" x="205" y="98" text-anchor="middle">2 Plan</text>
+      <text class="s-text-s" x="205" y="118" text-anchor="middle">once</text>
+      <path class="s-line" d="M260 102 H290" marker-end="url(#arr30)"/>
+      <rect class="s-dash" x="294" y="30" width="250" height="150" rx="10"/>
+      <text class="s-text-s" x="419" y="50" text-anchor="middle">repeat for every wave</text>
+      <rect class="s-orange" x="310" y="70" width="100" height="64" rx="8"/>
+      <text class="s-text-ink" x="360" y="107" text-anchor="middle">3 Migrate</text>
+      <rect class="s-green" x="430" y="70" width="100" height="64" rx="8"/>
+      <text class="s-text-b" x="480" y="107" text-anchor="middle">4 Monitor</text>
+      <path class="s-line-o" d="M410 92 H426" marker-end="url(#arr30)"/>
+      <path class="s-line-o" d="M480 134 V158 H360 V138" marker-end="url(#arr30)"/>
+      <text class="s-text-s" x="420" y="174" text-anchor="middle">next wave</text>
+      <path class="s-line" d="M544 102 H572" marker-end="url(#arr30)"/>
+      <rect class="s-purple" x="576" y="70" width="114" height="64" rx="8"/>
+      <text class="s-text-b" x="633" y="98" text-anchor="middle">5 Optimize</text>
+      <text class="s-text-s" x="633" y="118" text-anchor="middle">once, at end</text>
+      <text class="s-text-s" x="205" y="210" text-anchor="middle">The 7 Rs are chosen here</text>
+      <path class="s-line" d="M205 196 V140" marker-end="url(#arr30)"/>
+      <text class="s-text-s" x="419" y="230" text-anchor="middle">Can take 1–3 years for hundreds of services</text>
+    </svg>
+    <figcaption>Preparation and planning happen once. Migrate and monitor loop for every wave of applications. Optimization comes at the end.</figcaption>
+  </figure>
+
+  <h3>1. Prepare</h3>
+  <p>Look at the current architecture. Is the application one big <b>monolith</b> (everything in one codebase and one deployment), or already split into <b>microservices</b> (small, independently deployable services)?</p>
+  <ul>
+    <li>If it's a monolith and the company wants to be <b>cloud native</b>, developers and DevOps engineers may first split it into microservices.</li>
+    <li>Microservices fit containers well: each service becomes its own container, deployed on an orchestrator like EKS or ECS. See <a href="22-ecr.html">Lesson 22</a> for containers and <a href="23-ecs.html">Lesson 23</a> for orchestration.</li>
+  </ul>
+
+  <h3>2. Plan</h3>
+  <p>Two big decisions:</p>
+  <ol class="steps">
+    <li><b>Waves (phases).</b> Don't move 200 services at once. Group them, for example:
+      <ul>
+        <li>Wave 1: ~50 low-risk, less user-facing apps. Use them as a proof of concept.</li>
+        <li>Middle waves: slightly more critical, then critical apps.</li>
+        <li>Last wave: the ~20 most critical apps, once the process is proven.</li>
+      </ul>
+    </li>
+    <li><b>Strategy per app:</b> which of the 7 Rs fits each group (below).</li>
+  </ol>
+  <p>Preparation and planning are done <b>once</b>. After that, you don't go back to them.</p>
+
+  <h3>3. Migrate</h3>
+  <p>Move one wave at a time. As a DevOps engineer you'll typically:</p>
+  <ul>
+    <li>Write Terraform or CloudFormation to create the target infrastructure (<a href="26-terraform.html">Lesson 26</a>).</li>
+    <li>Write shell scripts for start-up and setup tasks, and cron jobs for recurring work.</li>
+    <li>Set up CloudWatch dashboards and alarms (<a href="18-cloudwatch.html">Lesson 18</a>).</li>
+    <li>Schedule the test team's automation suites, e.g. a daily Jenkins job against the new environment.</li>
+  </ul>
+
+  <h3>4. Monitor</h3>
+  <p>After a wave goes live, watch it for weeks or months, depending on how critical it is. Compare performance before and after with dashboards, and collect feedback from internal users or beta customers. Only when the wave looks healthy do you start the next one. Migrate + monitor repeat for every wave, so a project with 10 waves runs this loop 10 times.</p>
+
+  <h3>5. Optimize</h3>
+  <p>When everything has moved, <b>evaluate</b>: what did the migration achieve? Lower cost? Less maintenance? Better availability? Then improve on it. For example, "we cut costs by 40%; with rightsizing and reserved capacity we can reach 50% within six months". Each improvement becomes a ticket in the backlog.</p>
+
+  <h2>The 7 Rs of migration</h2>
+  <p>For each application you choose one strategy. In practice, most companies rely on the first three.</p>
+  <div class="table-wrap"><table>
+    <tr><th>Strategy</th><th>What it means</th><th>Example</th></tr>
+    <tr><td><b>Rehost</b><br><span class="muted">"lift and shift"</span></td><td>Move as-is, with minimal or no changes. Fastest and most popular. Works well when the app doesn't depend much on specific hardware or OS. Gains in cost and scaling are small until you optimise later.</td><td>On-prem Kubernetes with 3 namespaces → the same cluster layout built on EC2 in AWS.</td></tr>
+    <tr><td><b>Replatform</b><br><span class="muted">"lift, tinker and shift"</span></td><td>Mostly as-is, plus a few changes to use AWS features for availability, scaling or cost. No change to the core code.</td><td>Move a self-managed MySQL to Amazon RDS; spread nodes across several AZs.</td></tr>
+    <tr><td><b>Refactor / re-architect</b></td><td>Redesign the app to be cloud native. Most effort, most long-term benefit.</td><td>Break a monolith into containerised microservices on EKS or serverless.</td></tr>
+    <tr><td><b>Relocate</b></td><td>Move a whole platform to its AWS-hosted equivalent, without buying new hardware or rewriting apps.</td><td>VMware vSphere → VMware Cloud on AWS. On-prem OpenShift → Red Hat OpenShift Service on AWS (ROSA).</td></tr>
+    <tr><td><b>Repurchase</b><br><span class="muted">"drop and shop"</span></td><td>Replace the app with a different product, usually SaaS.</td><td>A self-hosted CRM → a SaaS CRM. Less common today.</td></tr>
+    <tr><td><b>Retain</b></td><td>Keep it on-premises for now, often for security, compliance or because it's not worth moving yet. Cloud apps connect to it securely.</td><td>A bank keeps its mainframe payment systems on-prem; the other apps on AWS reach them through a secure gateway.</td></tr>
+    <tr><td><b>Retire</b></td><td>Switch it off. Nobody uses it, so migrating it would waste effort.</td><td>10 of 200 apps have zero active users.</td></tr>
+  </table></div>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>Moving house. <b>Rehost</b>: pack everything and unpack it the same way. <b>Replatform</b>: same furniture, but you use the new building's laundry room instead of your own machine. <b>Refactor</b>: redesign the furniture to fit the new place. <b>Repurchase</b>: sell the old sofa, buy a new one. <b>Retain</b>: leave some things in storage. <b>Retire</b>: throw out what you never use. <b>Relocate</b>: move a whole furnished room in one piece.</div>
+  <div class="callout tip"><span class="callout-title">Tip</span>You don't need hands-on experience with all seven. A company typically picks one main approach, so knowing one well and understanding the rest is enough. Retain and retire are less "migration methods" and more team decisions about what <i>not</i> to move.</div>
+
+  <div class="demo" id="demo-7r">
+    <div class="demo-head">Try it: pick the right R</div>
+    <div class="demo-body">
+      <p>Read the scenario and choose the best strategy.</p>
+      <div class="output" id="r-q" style="white-space:normal;font-weight:600">Loading…</div>
+      <div class="row" id="r-opts" style="margin-top:10px"></div>
+      <div class="output" id="r-out" style="display:none;margin-top:10px;white-space:normal"></div>
+      <div class="row" style="margin-top:10px"><button class="btn primary" id="r-next">Next scenario</button><span class="muted" id="r-score" style="font-size:13px;align-self:center"></span></div>
+    </div>
+  </div>
+
+  <h2>Migrating databases safely</h2>
+  <p>Apps usually depend on databases, and data is the riskiest part to move. Two rules:</p>
+  <ol class="steps">
+    <li><b>Find the right managed fit.</b> Running your own database takes a lot of effort. If AWS has a managed equivalent, like <b>Amazon RDS</b> for MySQL or PostgreSQL, moving to it hands patching, backups and failover to AWS. This is a classic replatform.</li>
+    <li><b>Always have a way back.</b> Large databases can lose data or become unreachable mid-migration. Take backups and keep a copy running (on-prem prod or a pre-prod/staging database). If the cloud database has problems, point the application's connection URL back to that copy right away.</li>
+  </ol>
+  <div class="callout"><span class="callout-title">Tools worth knowing</span>AWS offers dedicated services: <b>AWS Application Migration Service</b> for rehosting servers, <b>AWS Database Migration Service (DMS)</b> for copying databases with minimal downtime (it can keep source and target in sync until cutover), and <b>AWS Migration Hub</b> for tracking progress across tools.</div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Structure your answer: "We prepared by assessing the architecture (and split the monolith), planned waves from least to most critical and chose a strategy per group, mostly rehost with some replatform to RDS. Each wave we migrated with Terraform and scripts, then monitored for a month with CloudWatch dashboards before the next. At the end we measured cost savings and opened optimisation tasks." If you didn't experience something, say so: "I was on the project for six months and didn't handle that part, but I'd approach it like this…"</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Which phases repeat for every wave of applications?</div>
+    <div class="opts"><button>Prepare and plan</button><button>Plan and optimize</button><button>Migrate and monitor</button></div>
+    <div class="explain">Preparation and planning happen once; migrate + monitor loop per wave; optimization comes at the end.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">You move an app unchanged, but swap its self-managed MySQL server for Amazon RDS. Which R is that?</div>
+    <div class="opts"><button>Rehost</button><button>Replatform</button><button>Retire</button></div>
+    <div class="explain">A small change to use a managed AWS service, without redesigning the app, is replatforming.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">A bank keeps its mainframe payment systems on-premises while everything else moves to AWS. Which strategy applies to the mainframe?</div>
+    <div class="opts"><button>Retain</button><button>Repurchase</button><button>Refactor</button></div>
+    <div class="explain">Keeping an application where it is, on purpose, is "retain".</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A migration is a project: <b>prepare → plan → (migrate → monitor) per wave → optimize</b>.</li>
+      <li>Move apps in waves, from least to most critical, and monitor each wave before the next.</li>
+      <li>The 7 Rs: rehost, replatform, refactor, relocate, repurchase, retain, retire. Rehost, replatform and refactor are the most common.</li>
+      <li>Databases need extra care: prefer managed services like RDS, and always keep a backup and a fallback copy.</li>
+      <li>In interviews, describe the process and your part in it, not only "lift and shift".</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var RS = ["Rehost", "Replatform", "Refactor", "Relocate", "Repurchase", "Retain", "Retire"];
+  var S = [
+    { s: "A Java app runs fine on a Linux VM. The deadline is in 6 weeks and the team wants zero code changes.", a: "Rehost", why: "No changes, fastest path: lift and shift it onto EC2. Optimise later." },
+    { s: "The app moves as-is, but the team wants to stop patching its own PostgreSQL server and use a managed database.", a: "Replatform", why: "A small tweak (self-managed DB → Amazon RDS) to gain AWS benefits without redesigning the app." },
+    { s: "A huge monolith can't scale its checkout feature on its own. The business wants independent releases per team.", a: "Refactor", why: "Splitting into microservices (e.g. containers on EKS) means re-architecting the app." },
+    { s: "The company runs hundreds of VMs on VMware vSphere and wants them in AWS without converting each VM.", a: "Relocate", why: "Moving the whole platform to VMware Cloud on AWS is a relocate: same hypervisor, different place." },
+    { s: "An old self-hosted ticketing tool needs constant upkeep. A SaaS product does the same job.", a: "Repurchase", why: "Dropping the old product and buying a (usually SaaS) replacement is repurchase, or \"drop and shop\"." },
+    { s: "Mainframe payment systems must stay in the bank's own data centre for regulatory reasons.", a: "Retain", why: "Keep it on-premises; cloud apps connect to it securely through a gateway." },
+    { s: "Usage logs show an internal reporting app hasn't had a single user in a year.", a: "Retire", why: "Migrating an unused app wastes effort. Switch it off." },
+    { s: "A Kubernetes cluster runs on-premises. The team will build the same cluster layout on EC2 with the same namespaces and deployments.", a: "Rehost", why: "Same setup, just running on AWS infrastructure: classic lift and shift." }
+  ];
+  var order = S.map(function (_, i) { return i; });
+  for (var i = order.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = order[i]; order[i] = order[j]; order[j] = t; }
+  var pos = -1, right = 0, answered = 0, done = false;
+  var q = document.getElementById("r-q"), opts = document.getElementById("r-opts"), out = document.getElementById("r-out"), score = document.getElementById("r-score");
+  var btns = RS.map(function (r) {
+    var b = document.createElement("button"); b.className = "btn"; b.type = "button"; b.textContent = r;
+    b.addEventListener("click", function () { pick(r, b); });
+    opts.appendChild(b); return b;
+  });
+  function show() {
+    pos = (pos + 1) % order.length; done = false;
+    q.textContent = "Scenario " + (pos + 1) + "/" + order.length + ": " + S[order[pos]].s;
+    out.style.display = "none";
+    btns.forEach(function (b) { b.disabled = false; b.removeAttribute("aria-pressed"); b.style.borderColor = ""; });
+  }
+  function pick(r, b) {
+    if (done) return; done = true; answered++;
+    var sc = S[order[pos]], ok = r === sc.a;
+    if (ok) right++;
+    btns.forEach(function (x) {
+      x.disabled = true;
+      if (x.textContent === sc.a) { x.setAttribute("aria-pressed", "true"); x.style.borderColor = "var(--green)"; }
+    });
+    if (!ok) b.style.borderColor = "var(--red)";
+    out.style.display = "block";
+    out.className = "output " + (ok ? "ok" : "bad");
+    out.textContent = (ok ? "Correct: " : "Not quite. Best answer: ") + sc.a + ". " + sc.why;
+    score.textContent = "Score: " + right + " / " + answered;
+  }
+  document.getElementById("r-next").addEventListener("click", show);
+  show();
+})();
+</script>
+</body>
+</html>

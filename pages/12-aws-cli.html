@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS CLI · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="12">
+<main class="wrap">
+  <header class="page-head">
+    <h1>AWS CLI</h1>
+    <p class="lead">Clicking through the console is fine for learning, but it doesn't scale. The AWS Command Line Interface (CLI) lets you list, create and delete AWS resources from your terminal in seconds. In this lesson you'll install it, connect it to your account with access keys, and learn how to work out any command from the docs.</p>
+  </header>
+
+  <h2>Why not just use the console?</h2>
+  <p>So far we've built everything in the <strong>AWS console</strong>, the web UI. That's great for learning, but it's <strong>not automation-friendly</strong>. Picture a busy DevOps week:</p>
+  <ul>
+    <li>"We need 10 VPCs for new projects by this afternoon."</li>
+    <li>"Create 20 S3 buckets with this exact configuration."</li>
+    <li>"Spin up 15 EC2 instances."</li>
+  </ul>
+  <p>Doing that by clicking means repeating the same screens over and over, which is slow, boring and easy to get wrong. Every serious tool, whether AWS, Jenkins or GitHub, solves this the same way: with an <strong>API</strong>.</p>
+
+  <h2>What is an API?</h2>
+  <p><strong>API</strong> stands for <strong>Application Programming Interface</strong>: a set of URLs that a program, rather than a person, can send requests to. You send a request like "create a bucket named X with versioning on", along with your credentials, and AWS sends back the result, usually as <strong>JSON</strong>.</p>
+  <ul>
+    <li><strong>Console (UI)</strong>: you reach AWS <em>manually</em> by clicking.</li>
+    <li><strong>API</strong>: you reach AWS <em>programmatically</em>, from a script, a tool or code.</li>
+  </ul>
+  <p>Calling raw APIs yourself is hard work. You'd have to build HTTP requests, sign them with your keys and parse JSON. So AWS and others built tools that sit on top of the API and do that work for you:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Tool</th><th>What you write</th><th>Best for</th></tr></thead>
+    <tbody>
+      <tr><td><strong>AWS CLI</strong></td><td>Short commands in a terminal</td><td>Quick tasks, checks and simple scripts</td></tr>
+      <tr><td><strong>SDKs</strong> (e.g. <code>boto3</code> for Python)</td><td>Code in your programming language</td><td>Apps and automation that talk to AWS (see <a href="20-cost-optimization.html">Lesson 20</a>)</td></tr>
+      <tr><td><strong>CloudFormation</strong>, <strong>Terraform</strong>, CDK</td><td>Templates/code describing the whole setup</td><td>Building and managing large stacks of resources (<a href="13-cloudformation.html">Lesson 13</a>, <a href="26-terraform.html">Lesson 26</a>)</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 290" role="img" aria-label="The console, AWS CLI, SDKs and infrastructure-as-code tools all send HTTPS requests to the AWS APIs, which create and manage services such as EC2, S3 and IAM.">
+      <defs><marker id="arr12a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box" x="16" y="20" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="101" y="49" text-anchor="middle">Console (click)</text>
+      <rect class="s-orange-soft" x="16" y="84" width="170" height="56" rx="8"/>
+      <text class="s-text-b" x="101" y="107" text-anchor="middle">AWS CLI</text>
+      <text class="s-text-s" x="101" y="127" text-anchor="middle">aws s3 ls</text>
+      <rect class="s-box" x="16" y="156" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="101" y="185" text-anchor="middle">SDK (boto3…)</text>
+      <rect class="s-box" x="16" y="220" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="101" y="249" text-anchor="middle">CFT / Terraform</text>
+      <path class="s-line" d="M186 44 L262 120" marker-end="url(#arr12a)"/>
+      <path class="s-line-o" d="M186 112 H262" marker-end="url(#arr12a)"/>
+      <path class="s-line" d="M186 180 L262 152" marker-end="url(#arr12a)"/>
+      <path class="s-line" d="M186 244 L262 168" marker-end="url(#arr12a)"/>
+      <rect class="s-ink" x="266" y="90" width="160" height="96" rx="10"/>
+      <text class="s-text-w" x="346" y="128" text-anchor="middle">AWS APIs</text>
+      <text class="s-text-w" x="346" y="152" text-anchor="middle" style="font-weight:400;font-size:12px">signed HTTPS requests</text>
+      <path class="s-line" d="M426 120 L490 64" marker-end="url(#arr12a)"/>
+      <path class="s-line" d="M426 138 H490" marker-end="url(#arr12a)"/>
+      <path class="s-line" d="M426 156 L490 212" marker-end="url(#arr12a)"/>
+      <rect class="s-blue" x="494" y="40" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="579" y="69" text-anchor="middle">EC2</text>
+      <rect class="s-blue" x="494" y="114" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="579" y="143" text-anchor="middle">S3</text>
+      <rect class="s-blue" x="494" y="188" width="170" height="48" rx="8"/>
+      <text class="s-text-b" x="579" y="217" text-anchor="middle">VPC, IAM, …</text>
+    </svg>
+    <figcaption>Every tool ends up calling the same AWS APIs. The CLI is a middleman that turns your typed command into an API call and prints the response.</figcaption>
+  </figure>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A translator. You say <code>aws s3 ls</code> in plain shorthand, and the CLI translates it into the exact API request AWS understands (here, <em>ListBuckets</em>), then translates the answer back for you.</div>
+
+  <h2>CLI or CloudFormation/Terraform?</h2>
+  <p>If they all call the same API, why learn more than one? Because they suit different jobs:</p>
+  <ul>
+    <li><strong>CLI = quick actions.</strong> Your manager asks "which S3 buckets do we have?" Running <code>aws s3 ls</code> answers in seconds, with no need to log in, switch regions and click around.</li>
+    <li><strong>IaC tools = big, repeatable setups.</strong> A VPC, subnets, EC2 instances and a load balancer as one unit is far easier to describe in a template that can be reviewed and reused. A very long CLI command is hard to remember and share.</li>
+  </ul>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"When do you use the CLI vs CloudFormation/Terraform?" Say: <em>CLI for quick, short tasks and small scripts; CFT/Terraform when creating or managing a full stack of resources that should be version-controlled and reviewed.</em> Every DevOps engineer uses the CLI daily, whatever IaC tool they pick.</div>
+
+  <h2>Step 1: install the CLI (version 2)</h2>
+  <p>Only install from the <strong>official AWS documentation</strong> (search "AWS CLI install", then User Guide → Get started → Install/update). Make sure you get <strong>version 2</strong>. Version 1 is old. Version 2 comes with everything it needs bundled in, so you don't have to install Python separately.</p>
+<pre><code># Linux (x86_64)
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
+
+# macOS (command-line installer)
+curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+sudo installer -pkg AWSCLIV2.pkg -target /
+
+# Windows (PowerShell or cmd)
+msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi
+
+# Verify — should print aws-cli/2.x.y ...
+aws --version</code></pre>
+  <div class="callout tip"><span class="callout-title">Tip</span>On Windows, a Linux environment makes DevOps practice easier: a VirtualBox Ubuntu VM, WSL, or at least <strong>Git Bash</strong> for a Unix-like terminal.</div>
+
+  <h2>Step 2: create access keys</h2>
+  <p>The CLI is installed, but it doesn't know <em>which</em> of the millions of AWS accounts to talk to, or who you are. For programs, AWS uses <strong>access keys</strong> instead of a username and password:</p>
+  <ul>
+    <li><strong>Access key ID</strong>: like a username (e.g. <code>AKIA…</code>).</li>
+    <li><strong>Secret access key</strong>: like a password. It's shown <strong>only once</strong> when you create it.</li>
+  </ul>
+  <p>Create them under your name (top right) → <strong>Security credentials</strong> → <strong>Access keys</strong> → <strong>Create access key</strong>. Each user can have at most <strong>two</strong> access keys, which lets you rotate them.</p>
+  <div class="callout warn"><span class="callout-title">Watch out</span>Anyone with your secret key can use your account. Never share it, paste it in chats or commit it to Git. Use an <strong>IAM user</strong>, not the root user. AWS warns you if you try to create root access keys, and in a real company you won't have root access anyway (see <a href="03-iam.html">Lesson 3: IAM</a>). Delete keys you no longer need.</div>
+
+  <h2>Step 3: <code>aws configure</code></h2>
+<pre><code>$ aws configure
+AWS Access Key ID [None]: AKIAIOSFODNN7EXAMPLE
+AWS Secret Access Key [None]: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+Default region name [None]: us-east-1
+Default output format [None]: json</code></pre>
+  <ul>
+    <li><strong>Default region</strong>: where commands run unless you pass <code>--region</code>.</li>
+    <li><strong>Output format</strong>: <code>json</code> (most common and script-friendly), <code>table</code> (easy to read) or <code>text</code>.</li>
+    <li>The values are saved in <code>~/.aws/credentials</code> (keys) and <code>~/.aws/config</code> (region, output).</li>
+  </ul>
+
+  <h3>Profiles: more than one account</h3>
+  <p>Most engineers work with several accounts or roles (dev, prod…). A <strong>profile</strong> is a named set of credentials:</p>
+<pre><code>aws configure --profile dev          # save a second set of keys as "dev"
+aws s3 ls --profile dev              # run one command as "dev"
+export AWS_PROFILE=dev               # use "dev" for the whole terminal session
+aws sts get-caller-identity          # "who am I?" — shows account and user ARN</code></pre>
+
+  <h2>Step 4: run commands</h2>
+  <p>Every command has the same shape:</p>
+<pre><code>aws &lt;service&gt; &lt;action&gt; [--option value ...]</code></pre>
+<pre><code># Verify the setup: list your buckets
+aws s3 ls
+2024-06-06 10:12:33 demo-abhishek-bucket
+
+# Create an EC2 instance (replace IDs with ones from YOUR account)
+aws ec2 run-instances \
+  --image-id ami-0abcdef1234567890 \
+  --instance-type t2.micro \
+  --key-name my-key \
+  --security-group-ids sg-0123456789abcdef0 \
+  --subnet-id subnet-0123456789abcdef0 \
+  --count 1</code></pre>
+  <p>The <code>run-instances</code> command is long because launching an instance in the console also asks for many details: the AMI, instance type, key pair, network and so on (<a href="04-ec2.html">Lesson 4</a>). The JSON reply includes the new instance ID and private IP, and you'll see the same instance in the console if you're looking at the <em>same region</em>.</p>
+
+  <h3>Reading the CLI reference (how to work out any command)</h3>
+  <p>Nobody memorizes these commands. Search <strong>"AWS CLI reference &lt;service&gt;"</strong>, e.g. "aws cli reference s3":</p>
+  <ol class="steps">
+    <li>Open the service page. Its <em>Available Commands</em> list shows actions like <code>cp</code>, <code>ls</code>, <code>mb</code> (make bucket), <code>mv</code>, <code>rb</code>, <code>rm</code>, <code>sync</code>.</li>
+    <li>Click a command to see its description, every option and examples.</li>
+    <li>For EC2, search the list for what you want to do (e.g. <code>run-instances</code>) and copy only the options you need.</li>
+    <li>You can also run <code>aws ec2 run-instances help</code> right in the terminal.</li>
+  </ol>
+  <p>Error messages tell you what's missing. Leave out <code>--image-id</code> and AWS replies: <em>"An error occurred (MissingParameter) when calling the RunInstances operation: The request must contain the parameter ImageId"</em>. Leaving out optional ones like <code>--key-name</code> still works, though without a key pair you can't SSH in.</p>
+
+  <div class="demo" id="demo-cli">
+    <div class="demo-head">Try it: command builder</div>
+    <div class="demo-body">
+      <p>Pick a service and an action, fill in the options, and see the command plus the API call the CLI makes for you. Empty a required field to see the kind of error you'd get.</p>
+      <div class="row">
+        <label for="cli-svc">Service</label>
+        <select id="cli-svc"></select>
+        <label for="cli-act">Action</label>
+        <select id="cli-act"></select>
+      </div>
+      <div id="cli-args" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:6px">
+        <label for="cli-region">--region</label>
+        <select id="cli-region"><option value="">(default)</option><option>us-east-1</option><option>ap-south-1</option><option>eu-west-1</option></select>
+        <label for="cli-outfmt">--output</label>
+        <select id="cli-outfmt"><option value="">(default)</option><option>json</option><option>table</option><option>text</option></select>
+        <label for="cli-prof">--profile</label>
+        <input type="text" id="cli-prof" placeholder="e.g. dev" style="width:110px">
+      </div>
+      <pre style="margin-top:12px;white-space:pre-wrap;word-break:break-all"><code id="cli-cmd"></code></pre>
+      <div class="output" id="cli-out"></div>
+    </div>
+  </div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What does the AWS CLI actually do when you run <code>aws s3 ls</code>?</div>
+    <div class="opts"><button>Logs into the web console in the background</button><button>Translates the command into an AWS API call (ListBuckets) and prints the response</button><button>Reads a local cache of your buckets</button></div>
+    <div class="explain">The CLI is a layer between you and the AWS API. It signs the request with your access keys, calls the API and formats the reply.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your manager wants a 3-tier setup (VPC, subnets, EC2, load balancer) that the team can review and recreate. Best tool?</div>
+    <div class="opts"><button>One very long AWS CLI command</button><button>The console, carefully</button><button>An IaC tool like CloudFormation or Terraform</button></div>
+    <div class="explain">For whole stacks that need review and repeatability, use IaC. Keep the CLI for quick tasks.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which pair of values does <code>aws configure</code> need to authenticate?</div>
+    <div class="opts"><button>Access key ID and secret access key</button><button>Root email and password</button><button>Account ID and region</button></div>
+    <div class="explain">Access keys are the programmatic equivalent of username and password. Region and output format are just defaults.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>The console doesn't scale for repeated work. APIs let programs manage AWS, and the CLI wraps those APIs in simple commands.</li>
+      <li>Install <strong>CLI v2</strong> from the official docs and check it with <code>aws --version</code>.</li>
+      <li>Authenticate with an IAM user's <strong>access keys</strong> through <code>aws configure</code>. Keep the secret key secret and use <strong>profiles</strong> for multiple accounts.</li>
+      <li>Command shape: <code>aws &lt;service&gt; &lt;action&gt; --options</code>. Look up options in the CLI reference or with <code>help</code>.</li>
+      <li>CLI for quick, short tasks. CloudFormation/Terraform for full, reviewable stacks.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  // args: [label, flag (null = positional), default, required]
+  var D = {
+    s3: {
+      ls: { api: "ListBuckets (or ListObjectsV2 if you give a bucket)", desc: "Lists all your buckets, or the objects inside one bucket.", args: [["Bucket or prefix (optional)", null, "", false]] },
+      mb: { api: "CreateBucket", desc: "Makes a new bucket. The name must be globally unique.", args: [["Bucket", null, "s3://app1-demo-dev-example.com", true]] },
+      cp: { api: "PutObject (upload) / GetObject (download)", desc: "Copies a file between your machine and S3. Add --recursive for folders.", args: [["Source", null, "./report.csv", true], ["Destination", null, "s3://app1-demo-dev-example.com/reports/", true]] },
+      sync: { api: "ListObjectsV2 + PutObject for changed files", desc: "Uploads only new or changed files. Great for deploying a static site.", args: [["Local folder", null, "./site", true], ["Bucket", null, "s3://app1-demo-dev-example.com", true]] },
+      rb: { api: "DeleteBucket", desc: "Removes a bucket. It must be empty, or add --force to delete its objects first.", args: [["Bucket", null, "s3://app1-demo-dev-example.com", true]] }
+    },
+    ec2: {
+      "describe-instances": { api: "DescribeInstances", desc: "Shows details (state, IPs, type…) of your instances in the region.", args: [["Instance IDs (optional)", "--instance-ids", "", false]] },
+      "run-instances": { api: "RunInstances", desc: "Launches new EC2 instances. The reply is JSON with the instance ID and private IP.", args: [["AMI ID", "--image-id", "ami-0abcdef1234567890", true], ["Instance type", "--instance-type", "t2.micro", false], ["Key pair", "--key-name", "my-key", false], ["Security group", "--security-group-ids", "sg-0123456789abcdef0", false], ["Subnet", "--subnet-id", "subnet-0123456789abcdef0", false], ["Count", "--count", "1", false]] },
+      "terminate-instances": { api: "TerminateInstances", desc: "Permanently deletes instances. There's no undo.", args: [["Instance IDs", "--instance-ids", "i-0123456789abcdef0", true]] },
+      "describe-vpcs": { api: "DescribeVpcs", desc: "Lists the VPCs in the region, including the default VPC.", args: [] }
+    },
+    iam: {
+      "list-users": { api: "ListUsers", desc: "Lists IAM users in the account. IAM is global, so --region doesn't matter.", args: [] },
+      "create-user": { api: "CreateUser", desc: "Creates an IAM user with no permissions until you attach a policy.", args: [["User name", "--user-name", "demo-cli-user", true]] }
+    },
+    sts: {
+      "get-caller-identity": { api: "GetCallerIdentity", desc: "\"Who am I?\" Prints the account ID and ARN your keys belong to. Handy for checking which profile you're using.", args: [] }
+    }
+  };
+  var svc = $("cli-svc"), act = $("cli-act"), box = $("cli-args");
+  Object.keys(D).forEach(function (s) { var o = document.createElement("option"); o.value = o.textContent = s; svc.appendChild(o); });
+  function fillActions() {
+    act.innerHTML = "";
+    Object.keys(D[svc.value]).forEach(function (a) { var o = document.createElement("option"); o.value = o.textContent = a; act.appendChild(o); });
+    fillArgs();
+  }
+  function fillArgs() {
+    box.innerHTML = "";
+    var spec = D[svc.value][act.value];
+    if (!spec.args.length) { box.innerHTML = "<p class='muted' style='margin:0'>This action needs no options.</p>"; }
+    spec.args.forEach(function (a, i) {
+      var wrap = document.createElement("div");
+      wrap.style.cssText = "margin:6px 0";
+      var lab = document.createElement("label");
+      lab.setAttribute("for", "cli-a" + i);
+      lab.style.cssText = "display:block;font-size:14px;color:var(--text-2)";
+      lab.textContent = (a[1] ? a[1] + "  ·  " : "") + a[0] + (a[3] ? " (required)" : "");
+      var inp = document.createElement("input");
+      inp.type = "text"; inp.id = "cli-a" + i; inp.value = a[2]; inp.style.cssText = "width:100%;box-sizing:border-box";
+      inp.addEventListener("input", build);
+      wrap.appendChild(lab); wrap.appendChild(inp); box.appendChild(wrap);
+    });
+    build();
+  }
+  function build() {
+    var s = svc.value, a = act.value, spec = D[s][a];
+    var parts = ["aws", s, a], missing = null;
+    spec.args.forEach(function (arg, i) {
+      var v = $("cli-a" + i).value.trim();
+      if (!v) { if (arg[3] && !missing) missing = arg; return; }
+      if (arg[1]) parts.push(arg[1] + " " + v); else parts.push(v);
+    });
+    var r = $("cli-region").value, o = $("cli-outfmt").value, p = $("cli-prof").value.trim();
+    if (r) parts.push("--region " + r);
+    if (o) parts.push("--output " + o);
+    if (p) parts.push("--profile " + p.replace(/\s+/g, "-"));
+    $("cli-cmd").textContent = parts.length > 4 ? parts.slice(0, 3).join(" ") + " \\\n  " + parts.slice(3).join(" \\\n  ") : parts.join(" ");
+    var out = $("cli-out");
+    if (missing) {
+      out.className = "output bad";
+      if (a === "run-instances") out.textContent = "An error occurred (MissingParameter) when calling the RunInstances operation: The request must contain the parameter ImageId";
+      else out.textContent = "aws: error: the following arguments are required: " + (missing[1] || missing[0].toLowerCase());
+      return;
+    }
+    out.className = "output ok";
+    out.innerHTML = "<strong>What it does:</strong> <span></span><br><strong>API call made for you:</strong> <code></code>" +
+      (r ? "<br><strong>Region:</strong> <span></span>" : "") + (p ? "<br><strong>Credentials:</strong> profile <code></code> from ~/.aws/credentials" : "");
+    var spans = out.querySelectorAll("span"), codes = out.querySelectorAll("code");
+    spans[0].textContent = spec.desc;
+    codes[0].textContent = spec.api;
+    if (r) spans[1].textContent = s === "iam" ? r + " (ignored, IAM is global)" : r + " overrides your default region";
+    if (p) codes[1].textContent = p;
+  }
+  svc.addEventListener("change", fillActions);
+  act.addEventListener("change", fillArgs);
+  ["cli-region", "cli-outfmt"].forEach(function (id) { $(id).addEventListener("change", build); });
+  $("cli-prof").addEventListener("input", build);
+  fillActions();
+})();
+</script>
+</body>
+</html>

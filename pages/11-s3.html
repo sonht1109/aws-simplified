@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S3: Object Storage · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="11">
+<main class="wrap">
+  <header class="page-head">
+    <h1>S3: Object Storage</h1>
+    <p class="lead">Amazon S3 is where companies keep files they can't afford to lose: backups, logs, reports, website files. You'll learn how buckets and objects work, how to keep old versions, how to pay less with storage classes, how to lock a bucket down, and how to host a website from one.</p>
+  </header>
+
+  <h2>The problem S3 solves</h2>
+  <p>When your laptop runs out of space, you buy a bigger disk or a USB drive. A company has the same problem, only much bigger:</p>
+  <ul>
+    <li><strong>Database backups and dumps</strong>: one backup of a big shopping site can be several terabytes.</li>
+    <li><strong>Application logs</strong>: for example, "keep the last 30 days of logs".</li>
+    <li><strong>Reports, CSV/Excel files, dashboard data, config files</strong>, images, videos.</li>
+  </ul>
+  <p><strong>S3 (Simple Storage Service)</strong> is AWS's answer: you put in as much data as you like, pay only for what you store, and AWS takes care of the disks. It was one of the very first AWS services, and it's often the first one people learn because the idea is easy to follow.</p>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A huge, never-full online drive. A <strong>bucket</strong> is a top-level folder you create, and every file you drop into it is an <strong>object</strong>.</div>
+
+  <h2>Buckets, objects and keys</h2>
+  <ul>
+    <li><strong>Object storage</strong> stores each file as a whole object (data + some metadata) that you read or write in one go through a web request. It's not a disk you mount and edit block by block (that's EBS, attached to an <a href="04-ec2.html">EC2</a> instance).</li>
+    <li><strong>Bucket</strong>: a container for objects. You create it, name it and pick a region.</li>
+    <li><strong>Object</strong>: anything you upload, such as <code>index.html</code>, a video or a 3 TB database dump. S3 doesn't care what type of file it is, so it calls them all "objects".</li>
+    <li><strong>Key</strong>: the object's full name inside the bucket, e.g. <code>logs/2024/06/app.log</code>. The slashes look like folders, but they're really just part of the name.</li>
+  </ul>
+
+  <h3>Limits worth remembering</h3>
+  <ul>
+    <li>There's <strong>no limit</strong> on how much data a bucket can hold.</li>
+    <li>A <strong>single object can be at most 5 TB</strong>. A bigger file must be split up.</li>
+    <li>For large files, use <strong>multipart upload</strong>: the file goes up in chunks (say 100 MB each). If your network drops, only the failed chunk is retried instead of starting over. AWS recommends it for anything over about 100 MB, and you must use it above 5 GB.</li>
+  </ul>
+
+  <h3>Bucket names are globally unique</h3>
+  <p>Every object can be reached over HTTPS with a URL, so a bucket name must be <strong>unique across all AWS accounts in the world</strong>, not just yours. If someone already took <code>abhishek</code>, you can't have it. Teams use a naming convention so names stay unique and meaningful:</p>
+  <pre><code>&lt;app&gt;-&lt;feature&gt;-&lt;environment&gt;-&lt;company domain&gt;
+app1-payments-prod-example.com</code></pre>
+  <p>Names must be 3–63 characters, using lowercase letters, numbers, dots and hyphens.</p>
+
+  <h3>Global names, regional buckets</h3>
+  <p>This trips people up: the <em>name</em> is global and the data can be reached from anywhere, but each bucket <strong>lives in one region</strong> that you choose. Pick a region close to your users so requests travel a shorter distance. That delay is called <strong>latency</strong>. (Regions and availability zones are covered in <a href="02-intro-to-aws.html">Lesson 2</a>.)</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 300" role="img" aria-label="A user reaches a bucket over HTTPS. The bucket lives in one region and S3 keeps copies of each object in several availability zones.">
+      <defs><marker id="arr11a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box" x="16" y="115" width="130" height="64" rx="8"/>
+      <text class="s-text-b" x="81" y="143" text-anchor="middle">You / your app</text>
+      <text class="s-text-s" x="81" y="163" text-anchor="middle">anywhere in world</text>
+      <path class="s-line-o" d="M146 147 H186" marker-end="url(#arr11a)"/>
+      <text class="s-text-s" x="166" y="138" text-anchor="middle">HTTPS</text>
+      <rect class="s-dash" x="192" y="14" width="474" height="272" rx="12"/>
+      <text class="s-text-s" x="206" y="34">Region: us-east-1</text>
+      <rect class="s-orange-soft" x="232" y="46" width="394" height="62" rx="8"/>
+      <text class="s-text-b" x="429" y="72" text-anchor="middle">Bucket: app1-payments-prod-example.com</text>
+      <text class="s-text-s" x="429" y="94" text-anchor="middle">object key: index.html</text>
+      <path class="s-line" d="M300 108 V160" marker-end="url(#arr11a)"/>
+      <path class="s-line" d="M429 108 V160" marker-end="url(#arr11a)"/>
+      <path class="s-line" d="M558 108 V160" marker-end="url(#arr11a)"/>
+      <rect class="s-blue" x="236" y="164" width="128" height="100" rx="8"/>
+      <text class="s-text-b" x="300" y="196" text-anchor="middle">AZ a</text>
+      <text class="s-text-s" x="300" y="220" text-anchor="middle">copy of</text>
+      <text class="s-text" x="300" y="240" text-anchor="middle">index.html</text>
+      <rect class="s-blue" x="365" y="164" width="128" height="100" rx="8"/>
+      <text class="s-text-b" x="429" y="196" text-anchor="middle">AZ b</text>
+      <text class="s-text-s" x="429" y="220" text-anchor="middle">copy of</text>
+      <text class="s-text" x="429" y="240" text-anchor="middle">index.html</text>
+      <rect class="s-blue" x="494" y="164" width="128" height="100" rx="8"/>
+      <text class="s-text-b" x="558" y="196" text-anchor="middle">AZ c</text>
+      <text class="s-text-s" x="558" y="220" text-anchor="middle">copy of</text>
+      <text class="s-text" x="558" y="240" text-anchor="middle">index.html</text>
+    </svg>
+    <figcaption>You pick one region for a bucket. Inside that region, S3 quietly keeps copies of each object in several availability zones, so losing one data center doesn't lose your data.</figcaption>
+  </figure>
+
+  <h2>Why S3 is so popular</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Durability: "11 nines"</h3><p>S3 is designed for <strong>99.999999999%</strong> durability. Put another way, if you store 10 million objects, you can expect to lose one about every 10,000 years. That's possible because S3 copies every object across several data centers.</p></div>
+    <div class="card"><h3>Availability</h3><p>Your data can be read when you need it. S3 Standard is designed for 99.99% availability.</p></div>
+    <div class="card"><h3>Scalability</h3><p>Start with one 100-byte file and grow to petabytes. You don't have to buy or resize any disks.</p></div>
+    <div class="card"><h3>Security</h3><p>Encryption, bucket policies, Block Public Access, access logging and object lock. More on these below.</p></div>
+    <div class="card"><h3>Cost efficiency</h3><p>You pay per GB per month, and old or rarely used data can move to much cheaper storage classes.</p></div>
+    <div class="card"><h3>Performance</h3><p>Choosing a nearby region gives fast transfers, and multipart upload makes huge uploads reliable.</p></div>
+  </div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Why S3?" A strong short answer: <em>it's simple object storage with 11 nines of durability, high availability, practically unlimited scale, strong security controls, and low cost thanks to storage classes.</em></div>
+
+  <h2>Creating a bucket and uploading</h2>
+  <ol class="steps">
+    <li>In the console, search for <strong>S3</strong>, open <strong>Buckets</strong>, then click <strong>Create bucket</strong>.</li>
+    <li>Enter a globally unique name and pick a region.</li>
+    <li>Leave <strong>Block all public access</strong> turned on. That's the safe default.</li>
+    <li>Leave versioning at its default for now. <strong>Server-side encryption is on by default</strong>: since January 2023, every new object is encrypted with S3-managed keys.</li>
+    <li>Click <strong>Create bucket</strong>, open it, click <strong>Upload</strong>, add a file and upload. Your file is now an object, and it stays safe even if your laptop dies.</li>
+  </ol>
+
+  <h2>Versioning: keep every old copy</h2>
+  <p>Say you upload <code>app.log</code> today and a changed <code>app.log</code> tomorrow. <strong>Without versioning</strong>, S3 simply replaces the old file, and yesterday's copy is gone. <strong>With versioning</strong> turned on (Bucket → Properties → Bucket Versioning → Enable), S3 keeps every version, a bit like Git keeps the history of a file. If someone says "yesterday's file was wrong, give me the one from the day before", you can download that exact version.</p>
+  <ul>
+    <li>Each version gets its own <strong>version ID</strong>.</li>
+    <li>Deleting a file in a versioned bucket doesn't destroy the data. S3 adds a <strong>delete marker</strong> on top, so the file looks gone but older versions are still there. Remove the marker and the file comes back.</li>
+    <li>Once enabled, versioning can only be <strong>suspended</strong>, not fully turned off.</li>
+    <li>S3 can keep versions, but it isn't a replacement for Git: there are no code reviews, branches or pull requests.</li>
+  </ul>
+
+  <div class="demo" id="demo-ver">
+    <div class="demo-head">Try it: versioning simulator</div>
+    <div class="demo-body">
+      <p>Upload <code>report.csv</code> a few times, delete it, then try again with versioning enabled. Watch the version list and what a normal download returns.</p>
+      <div class="row">
+        <span>Versioning:</span>
+        <button class="btn" id="ver-off" aria-pressed="true">Off (never enabled)</button>
+        <button class="btn" id="ver-on" aria-pressed="false">Enabled</button>
+        <button class="btn" id="ver-sus" aria-pressed="false" disabled>Suspended</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="ver-up">Upload new edit</button>
+        <button class="btn" id="ver-del">Delete</button>
+        <button class="btn" id="ver-undo">Remove delete marker</button>
+        <button class="btn" id="ver-reset">Reset</button>
+      </div>
+      <div class="output" id="ver-get">GET report.csv → 404 Not Found</div>
+      <div id="ver-list" style="margin-top:10px;font-size:14px"></div>
+    </div>
+  </div>
+
+  <h2>Storage classes: pay for what you need</h2>
+  <p>Storage is a trade-off. Data you read often has to come back instantly, which costs more. Data you almost never read can sit somewhere slower and much cheaper. S3 lets you pick a <strong>storage class</strong> for each object. Durability stays at 11 nines for all of them. What changes is price, how fast you get the data back, and the minimum time you pay for.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Storage class</th><th>Best for</th><th>Getting data back</th><th>Storage price</th></tr></thead>
+    <tbody>
+      <tr><td><strong>S3 Standard</strong> (default)</td><td>Data used often</td><td>Instant (milliseconds)</td><td>Highest (about $0.023/GB-month in us-east-1)</td></tr>
+      <tr><td><strong>Intelligent-Tiering</strong></td><td>Unknown or changing access patterns</td><td>Instant for its frequent and infrequent tiers</td><td>S3 moves each object between tiers for you, for a small monitoring fee</td></tr>
+      <tr><td><strong>Standard-IA</strong> (Infrequent Access)</td><td>Used about once a month but must be fast</td><td>Instant, plus a per-GB retrieval fee</td><td>Lower (minimum 30 days)</td></tr>
+      <tr><td><strong>One Zone-IA</strong></td><td>Copies you can re-create</td><td>Instant</td><td>Lower still, but stored in only <em>one</em> AZ</td></tr>
+      <tr><td><strong>Glacier Instant Retrieval</strong></td><td>Archives opened a few times a year</td><td>Milliseconds</td><td>Very low (minimum 90 days)</td></tr>
+      <tr><td><strong>Glacier Flexible Retrieval</strong></td><td>Backups you rarely restore</td><td>Minutes to about 12 hours</td><td>Very low (minimum 90 days)</td></tr>
+      <tr><td><strong>Glacier Deep Archive</strong></td><td>Compliance data you keep for years</td><td>12–48 hours</td><td>Lowest (minimum 180 days)</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Prices change and vary by region. Check the official S3 pricing page. Even small numbers add up fast when you're storing terabytes.</p>
+
+  <div class="demo" id="demo-sc">
+    <div class="demo-head">Try it: storage class picker</div>
+    <div class="demo-body">
+      <div class="row">
+        <label for="sc-freq">How often is it read?</label>
+        <select id="sc-freq">
+          <option value="daily">Many times a day</option>
+          <option value="monthly">About once a month</option>
+          <option value="yearly">A few times a year</option>
+          <option value="never">Almost never (kept for rules/audits)</option>
+          <option value="unknown">No idea / it changes</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="sc-wait">When you need it, how long can you wait?</label>
+        <select id="sc-wait">
+          <option value="ms">It must be instant</option>
+          <option value="hours">Minutes to a few hours is fine</option>
+          <option value="days">Up to 2 days is fine</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px"><label><input type="checkbox" id="sc-recreate"> I could easily re-create this data if it were lost</label></div>
+      <div class="output ok" id="sc-out"></div>
+    </div>
+  </div>
+
+  <h3>Lifecycle rules: automate the savings</h3>
+  <p>You don't have to move objects by hand. A <strong>lifecycle rule</strong> (Bucket → Management) does it on a schedule. This pairs nicely with versioning, which would otherwise keep paying for every old copy:</p>
+  <ul>
+    <li>Move objects to Standard-IA after 30 days, and to Glacier after 90.</li>
+    <li>Move <em>previous versions</em> to Glacier Deep Archive, or delete them after 5 or 10 days.</li>
+    <li>Delete logs older than 30 days.</li>
+  </ul>
+
+  <h2>Other bucket properties at a glance</h2>
+  <ul>
+    <li><strong>Tags</strong>: key/value labels like <code>project=app1</code>. They make it easy to answer "which buckets belong to this project?" and to split costs by team.</li>
+    <li><strong>Default encryption</strong>: on by default. S3 supports encryption <em>at rest</em> (on AWS's disks) and <em>in transit</em> (over HTTPS).</li>
+    <li><strong>Server access logging</strong>: records who accessed which object, which helps you spot suspicious activity. It's off by default.</li>
+    <li><strong>Event notifications</strong>: when an object is uploaded or deleted, S3 can trigger something else, such as a Lambda function (see <a href="19-lambda.html">Lesson 19</a>).</li>
+    <li><strong>Object Lock</strong>: makes objects write-once-read-many, so nobody can overwrite or delete them for a set period. Useful for sensitive or regulated data.</li>
+    <li><strong>Static website hosting</strong>: covered in demo 2 below.</li>
+  </ul>
+
+  <h2>Demo 1: lock a bucket with a bucket policy</h2>
+  <p><strong>The scenario:</strong> someone in your company has an <a href="03-iam.html">IAM</a> policy like <code>AmazonS3FullAccess</code>, which means they can open <em>every</em> bucket, including the one holding sensitive data. As the bucket owner, you can block them anyway with a <strong>bucket policy</strong>. That's a JSON policy attached to the bucket itself rather than to a user.</p>
+  <ol class="steps">
+    <li>Create an IAM user with no permissions and log in as them in a private browser window. Opening S3 shows "you don't have permissions to list buckets", as expected.</li>
+    <li>Attach <code>AmazonS3FullAccess</code> to that user. Now they can open your bucket and download files. That's the problem.</li>
+    <li>In your bucket, go to <strong>Permissions → Bucket policy → Edit</strong> and add a statement that denies everyone except you. The <strong>policy generator</strong> (Add statement) helps you build the JSON.</li>
+    <li>Refresh the other user's window. They now get "Insufficient permissions to list objects".</li>
+  </ol>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DenyEveryoneExceptOwner",
+      "Effect": "Deny",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::app1-payments-prod-example.com",
+        "arn:aws:s3:::app1-payments-prod-example.com/*"
+      ],
+      "Condition": {
+        "StringNotEquals": {
+          "aws:PrincipalArn": "arn:aws:iam::111122223333:root"
+        }
+      }
+    }
+  ]
+}</code></pre>
+  <ul>
+    <li><strong>Principal</strong> <code>"*"</code>: applies to everyone.</li>
+    <li><strong>Effect</strong> <code>Deny</code> + <strong>Action</strong> <code>s3:*</code>: block every S3 action.</li>
+    <li><strong>Resource</strong>: list <em>both</em> the bucket ARN and <code>bucket/*</code> (the objects inside). Forgetting one of the two is a classic mistake.</li>
+    <li><strong>Condition</strong>: "unless the caller is this ARN", so you don't lock yourself out. Replace <code>111122223333</code> with your account ID.</li>
+  </ul>
+  <div class="callout warn"><span class="callout-title">Watch out</span>An explicit <strong>Deny</strong> always beats an Allow. A careless deny-all policy can lock out your own admins. The account's root user can still delete the bucket policy to recover.</div>
+
+  <h2>Demo 2: host a static website</h2>
+  <p>A <strong>static website</strong> is plain HTML, CSS, JavaScript and images, with no server-side code. S3 can serve one cheaply to the whole world. In real jobs, developers usually set this up once, but you should know the steps.</p>
+  <ol class="steps">
+    <li>Create a bucket and upload your <code>index.html</code>.</li>
+    <li>Go to <strong>Properties → Static website hosting → Edit</strong>, choose <em>Host a static website</em>, set the index document to <code>index.html</code>, then save. You get a website endpoint URL like <code>http://&lt;bucket&gt;.s3-website-us-east-1.amazonaws.com</code>.</li>
+    <li>Open the URL and you get <strong>403 Forbidden</strong>, because public access is still blocked.</li>
+    <li>Go to <strong>Permissions → Block public access → Edit</strong>, untick <em>Block all public access</em> and confirm. If the box can't be changed, Block Public Access is also switched on at the <em>account</em> level and must be turned off there too. Also remove any deny-all policy from demo 1.</li>
+    <li>Still "Access denied"? Turning off the block only <em>allows</em> public policies. You still need a policy that grants public read:</li>
+  </ol>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadGetObject",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::app1-payments-prod-example.com/*"
+    }
+  ]
+}</code></pre>
+  <p>Refresh the page and your site loads.</p>
+  <div class="callout tip"><span class="callout-title">Tip</span>If your page's JavaScript calls APIs on other domains, the browser may block those calls unless <strong>CORS</strong> (Cross-Origin Resource Sharing) is configured. For real sites, you'd usually put a CDN in front of the bucket and keep the bucket private. See <a href="21-cloudfront.html">Lesson 21: CloudFront</a>. A custom domain comes from <a href="08-route53.html">Route 53</a>.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your bucket has versioning enabled and someone deletes <code>report.csv</code>. What happens?</div>
+    <div class="opts"><button>The file and all its versions are erased forever</button><button>S3 refuses the delete</button><button>S3 adds a delete marker; older versions are still there and can be restored</button></div>
+    <div class="explain">In a versioned bucket, a normal delete only places a delete marker on top. Remove the marker (or download an older version ID) to get the file back.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">A user has <code>AmazonS3FullAccess</code> in IAM, but you want them out of one sensitive bucket. What's the simplest fix?</div>
+    <div class="opts"><button>Turn on default encryption</button><button>Add a bucket policy with an explicit Deny for everyone except the owner</button><button>Move the bucket to another region</button></div>
+    <div class="explain">Bucket policies are attached to the bucket, and an explicit Deny overrides any Allow in the user's IAM policy.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">You must keep audit files for 7 years and will probably never read them. Waiting 2 days is fine if you ever do. Which class is cheapest?</div>
+    <div class="opts"><button>S3 Glacier Deep Archive</button><button>S3 Standard</button><button>S3 Standard-IA</button></div>
+    <div class="explain">Deep Archive is the cheapest class. Retrieval takes 12–48 hours, which fits rarely read compliance data.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>S3 stores <strong>objects</strong> (any file, up to 5 TB each) in <strong>buckets</strong>. Bucket names are globally unique, but each bucket lives in one region.</li>
+      <li>11 nines of durability come from automatic copies across multiple AZs.</li>
+      <li><strong>Versioning</strong> keeps old copies, and deletes become delete markers. Use <strong>lifecycle rules</strong> so old versions don't pile up costs.</li>
+      <li>Pick a <strong>storage class</strong> by how often you read the data and how fast you need it back. Standard costs the most, Deep Archive the least.</li>
+      <li>Keep Block Public Access on. Use <strong>bucket policies</strong> to restrict access even for users with broad IAM rights.</li>
+      <li>Static website = upload files + enable website hosting + allow public access + a public-read <code>s3:GetObject</code> policy.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  /* ---------- Versioning simulator ---------- */
+  var mode = "off"; // off | on | sus
+  var versions = []; // newest first: {id, label, marker}
+  var edit = 0, seq = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  function rid() { seq++; return "v" + seq.toString(36) + Math.random().toString(36).slice(2, 7); }
+  function setMode(m) {
+    mode = m;
+    $("ver-off").setAttribute("aria-pressed", m === "off");
+    $("ver-on").setAttribute("aria-pressed", m === "on");
+    $("ver-sus").setAttribute("aria-pressed", m === "sus");
+    if (m !== "off") { $("ver-off").disabled = true; $("ver-sus").disabled = false; }
+    render("Versioning is now " + (m === "on" ? "Enabled." : m === "sus" ? "Suspended. New writes get version ID \"null\"; older versions are kept." : "off."));
+  }
+  function dropNull() { versions = versions.filter(function (v) { return v.id !== "null"; }); }
+  function upload() {
+    edit++;
+    var v = { id: mode === "on" ? rid() : "null", label: "edit #" + edit, marker: false };
+    if (mode === "on") versions.unshift(v);
+    else { dropNull(); versions.unshift(v); }
+    render(mode === "off" ? "Uploaded. With versioning off, the old file is simply replaced." : "Uploaded a new version.");
+  }
+  function del() {
+    if (!versions.length || versions[0].marker) { render("Nothing to delete: the object already looks deleted."); return; }
+    if (mode === "off") { versions = []; render("Deleted. Without versioning, the data is gone for good."); return; }
+    var m = { id: mode === "on" ? rid() : "null", label: "delete marker", marker: true };
+    if (mode === "sus") dropNull();
+    versions.unshift(m);
+    render("S3 added a delete marker. The file looks gone, but older versions are still stored.");
+  }
+  function undo() {
+    if (versions.length && versions[0].marker) { versions.shift(); render("Delete marker removed. The previous version is current again."); }
+    else render("There's no delete marker on top to remove.");
+  }
+  function render(msg) {
+    var cur = versions[0];
+    var get = $("ver-get");
+    if (!cur || cur.marker) { get.textContent = "GET report.csv → 404 Not Found" + (msg ? "  ·  " + msg : ""); get.className = "output bad"; }
+    else { get.textContent = "GET report.csv → returns " + cur.label + (msg ? "  ·  " + msg : ""); get.className = "output ok"; }
+    var list = $("ver-list");
+    list.innerHTML = "";
+    if (!versions.length) { list.innerHTML = "<em style='color:var(--text-2)'>No versions stored.</em>"; return; }
+    var head = document.createElement("div");
+    head.style.cssText = "font-weight:700;margin-bottom:4px";
+    head.textContent = "Stored versions (newest first): " + versions.length;
+    list.appendChild(head);
+    versions.forEach(function (v, i) {
+      var d = document.createElement("div");
+      d.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:6px 10px;margin:4px 0;border-radius:8px;border:1px solid var(--border);background:" + (v.marker ? "var(--red-soft)" : i === 0 ? "var(--green-soft)" : "var(--surface-2)");
+      d.innerHTML = "<code></code><span></span>";
+      d.firstChild.textContent = "id: " + v.id;
+      d.lastChild.textContent = v.label + (i === 0 ? "  (current)" : "");
+      list.appendChild(d);
+    });
+  }
+  $("ver-off").onclick = function () { if (mode === "off") render(""); };
+  $("ver-on").onclick = function () { setMode("on"); };
+  $("ver-sus").onclick = function () { if (mode !== "off") setMode("sus"); };
+  $("ver-up").onclick = upload;
+  $("ver-del").onclick = del;
+  $("ver-undo").onclick = undo;
+  $("ver-reset").onclick = function () {
+    versions = []; edit = 0; mode = "off";
+    $("ver-off").disabled = false; $("ver-sus").disabled = true;
+    $("ver-off").setAttribute("aria-pressed", "true"); $("ver-on").setAttribute("aria-pressed", "false"); $("ver-sus").setAttribute("aria-pressed", "false");
+    render("");
+  };
+  render("");
+
+  /* ---------- Storage class picker ---------- */
+  function pick() {
+    var f = $("sc-freq").value, w = $("sc-wait").value, re = $("sc-recreate").checked, c, why;
+    if (f === "unknown") { c = "S3 Intelligent-Tiering"; why = "S3 watches how each object is used and moves it to a cheaper tier when it goes quiet. No retrieval fees."; }
+    else if (f === "daily") { c = "S3 Standard"; why = "Frequently read data belongs in the default class: instant access and no retrieval fees."; }
+    else if (f === "monthly") {
+      if (w !== "ms") { c = "S3 Standard-IA"; why = "Read about monthly, so infrequent access fits. It's instant anyway, and Glacier classes would make you pay retrieval fees too often."; }
+      else { c = re ? "S3 One Zone-IA" : "S3 Standard-IA"; why = re ? "Infrequent and easy to re-create, so a single AZ is an acceptable risk for a lower price." : "Instant access, cheaper storage, small per-GB retrieval fee. Minimum 30 days."; }
+    }
+    else if (f === "yearly") {
+      if (w === "ms") { c = "S3 Glacier Instant Retrieval"; why = "Archive pricing, but still returned in milliseconds. Minimum 90 days."; }
+      else { c = "S3 Glacier Flexible Retrieval"; why = "Very cheap. Restores take minutes to hours, which is fine for occasional backup restores. Minimum 90 days."; }
+    }
+    else {
+      if (w === "ms") { c = "S3 Glacier Instant Retrieval"; why = "Rarely read, but you need it instantly when you do."; }
+      else if (w === "hours") { c = "S3 Glacier Flexible Retrieval"; why = "Cheap archive that comes back within hours."; }
+      else { c = "S3 Glacier Deep Archive"; why = "The cheapest class of all. Restores take 12–48 hours. Minimum 180 days."; }
+    }
+    if (re && c.indexOf("Standard-IA") > -1 && c.indexOf("One Zone") < 0 && f === "monthly") { c = "S3 One Zone-IA"; why = "Infrequent and easy to re-create, so a single AZ is an acceptable risk for a lower price."; }
+    $("sc-out").innerHTML = "<strong></strong><br><span></span>";
+    $("sc-out").firstChild.textContent = "→ " + c;
+    $("sc-out").lastChild.textContent = why;
+  }
+  ["sc-freq", "sc-wait", "sc-recreate"].forEach(function (id) { $(id).addEventListener("change", pick); });
+  pick();
+})();
+</script>
+</body>
+</html>

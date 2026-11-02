@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ECR: Container Registry · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="22">
+<main class="wrap">
+  <header class="page-head">
+    <h1>ECR: Container Registry</h1>
+    <p class="lead">Containers need a place to live between "built on my laptop" and "running in production". This lesson gives a quick containers primer, explains what a container registry is, compares Amazon ECR with Docker Hub, and walks you through pushing your first image.</p>
+  </header>
+
+  <h2>Quick primer: containers and images</h2>
+  <p>Everything in this lesson (and the ECS and EKS lessons after it) is built on a few container words. Here they are in plain language:</p>
+  <ul>
+    <li><strong>Container:</strong> a lightweight package that holds your application code <em>plus</em> everything it needs to run (runtime, libraries, settings). It runs the same way on your laptop, a test server or production.</li>
+    <li><strong>Image:</strong> the read-only template a container starts from. Think "recipe + ingredients, frozen". You build an image once and can run many containers from it.</li>
+    <li><strong>Dockerfile:</strong> a text file with the steps to build an image (start from a base image like <code>python</code>, copy the code, install packages, set the start command).</li>
+    <li><strong>Tag:</strong> a label on an image that marks its version, e.g. <code>my-app:1.4.2</code> or <code>my-app:latest</code>.</li>
+    <li><strong>Container registry:</strong> a server that stores images so others can download (<em>pull</em>) them. You upload with <em>push</em>.</li>
+    <li><strong>Repository:</strong> one folder inside a registry that holds all versions (tags) of one image, e.g. <code>demo-app-repo</code>.</li>
+  </ul>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A registry works like a photo-sharing app for images. You post a photo from your phone, and a friend on the other side of the world can see it. You push an image from your laptop, and a server anywhere in the world can pull it.</div>
+  <div class="callout"><span class="callout-title">Note</span>"Container" doesn't have to mean "Docker". Docker made containers popular, but any tool that follows the <strong>OCI</strong> (Open Container Initiative) standard, such as Podman or Buildah, can build images that ECR stores. This lesson uses Docker commands because they are the most common.</div>
+
+  <h2>What does ECR stand for?</h2>
+  <div class="grid-2">
+    <div class="card"><h3>E: Elastic</h3><p>As with EC2, EBS and EKS, the "E" means it scales and stays available. You can store as many images as you need and pay for what you use. AWS keeps the service up.</p></div>
+    <div class="card"><h3>C: Container</h3><p>It stores container images (and other OCI artifacts).</p></div>
+    <div class="card"><h3>R: Registry</h3><p>Like Docker Hub, Quay.io, Google's registry or GitHub Container Registry (GHCR), it's a place to push and pull images.</p></div>
+  </div>
+  <p><strong>Amazon ECR (Elastic Container Registry)</strong> is AWS's fully managed container registry. You don't run any servers. You create repositories and push images to them.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 270" role="img" aria-label="Developer builds an image from a Dockerfile, tags it, pushes it to an ECR repository, and ECS, EKS or EC2 pull it">
+      <defs><marker id="arr22" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-dash" x="14" y="20" width="250" height="230" rx="10"/>
+      <text class="s-text-s" x="139" y="40" text-anchor="middle">Your laptop / CI server</text>
+      <rect class="s-box2" x="44" y="56" width="190" height="46" rx="8"/>
+      <text class="s-text-b" x="139" y="84" text-anchor="middle">Dockerfile + code</text>
+      <path class="s-line" d="M139 102 V128" marker-end="url(#arr22)"/>
+      <text class="s-text-s" x="150" y="120">docker build</text>
+      <rect class="s-blue" x="44" y="132" width="190" height="46" rx="8"/>
+      <text class="s-text-b" x="139" y="160" text-anchor="middle">Image: demo-app:latest</text>
+      <path class="s-line" d="M139 178 V202" marker-end="url(#arr22)"/>
+      <text class="s-text-s" x="150" y="195">docker tag</text>
+      <rect class="s-blue" x="30" y="204" width="218" height="38" rx="8"/>
+      <text class="s-text-s" x="139" y="228" text-anchor="middle">…amazonaws.com/demo-app:latest</text>
+      <path class="s-line-o" d="M248 223 H300" />
+      <path class="s-line-o" d="M300 223 V150 H318" marker-end="url(#arr22)"/>
+      <text class="s-text-b" x="300" y="245" text-anchor="middle">push</text>
+      <rect class="s-orange-soft" x="320" y="70" width="170" height="140" rx="10"/>
+      <text class="s-text-b" x="405" y="96" text-anchor="middle">Amazon ECR</text>
+      <rect class="s-box" x="336" y="110" width="138" height="84" rx="6"/>
+      <text class="s-text-b" x="405" y="132" text-anchor="middle">repo: demo-app</text>
+      <text class="s-text-s" x="405" y="152" text-anchor="middle">:latest</text>
+      <text class="s-text-s" x="405" y="170" text-anchor="middle">:v1  :v2</text>
+      <text class="s-text-s" x="405" y="186" text-anchor="middle">private, IAM-controlled</text>
+      <rect class="s-green" x="560" y="40" width="125" height="44" rx="8"/>
+      <text class="s-text-b" x="622" y="67" text-anchor="middle">ECS</text>
+      <rect class="s-green" x="560" y="118" width="125" height="44" rx="8"/>
+      <text class="s-text-b" x="622" y="145" text-anchor="middle">EKS</text>
+      <rect class="s-green" x="560" y="196" width="125" height="44" rx="8"/>
+      <text class="s-text-b" x="622" y="223" text-anchor="middle">EC2 / CodeBuild</text>
+      <path class="s-line" d="M490 120 L558 66" marker-end="url(#arr22)"/>
+      <path class="s-line" d="M490 140 H558" marker-end="url(#arr22)"/>
+      <path class="s-line" d="M490 160 L558 214" marker-end="url(#arr22)"/>
+      <text class="s-text-b" x="525" y="132" text-anchor="middle">pull</text>
+    </svg>
+    <figcaption>Build and tag on your machine, push to an ECR repository, and AWS services pull the image to run it.</figcaption>
+  </figure>
+
+  <h2>ECR vs Docker Hub</h2>
+  <p>This is a classic interview question: "Which registry do you use, and why not Docker Hub?" Both store images. The difference is focus and integration.</p>
+  <div class="table-wrap"><table>
+    <tr><th></th><th>Docker Hub</th><th>Amazon ECR</th></tr>
+    <tr><td>Default repository type</td><td>Public (anyone can pull)</td><td>Private (only allowed identities can pull)</td></tr>
+    <tr><td>Who can log in</td><td>Separate Docker Hub accounts for every person</td><td>Your existing <a href="03-iam.html">IAM</a> users and roles, no new accounts</td></tr>
+    <tr><td>Access control</td><td>Docker Hub teams/orgs</td><td>IAM policies + repository policies</td></tr>
+    <tr><td>Integration</td><td>Works everywhere</td><td>Built-in with ECS, EKS, Fargate, CodeBuild, Lambda</td></tr>
+    <tr><td>Support and uptime</td><td>Docker, Inc.</td><td>AWS, under the same support plan as the rest of your account</td></tr>
+    <tr><td>Best for</td><td>Public images, personal projects</td><td>Company/private images on AWS</td></tr>
+  </table></div>
+  <p>Picture a company with 10,000 engineers. With Docker Hub private repos, every person needs another account, and admins must manage access in a second place. With ECR, the IAM users, roles and policies you already have simply apply to images too.</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Say you use your cloud provider's registry for private company images (ECR on AWS, Google's Artifact Registry on GCP), because it plugs into existing IAM and services. Docker Hub is great for <em>public</em> images. Quay.io is another popular private option.</div>
+
+  <h2>Creating a repository</h2>
+  <p>In the console, search for <strong>Elastic Container Registry</strong> and click <em>Create repository</em>. No sign-up is needed because you're already in your AWS account.</p>
+  <ul>
+    <li><strong>Visibility:</strong> <em>Private</em> (default and recommended). Public ECR repos exist too.</li>
+    <li><strong>Repository name:</strong> e.g. <code>demo-app-repo</code> (lowercase).</li>
+    <li><strong>Tag immutability:</strong> when on, nobody can push a different image over an existing tag. <code>v1.0</code> will always mean the same image, which is safer for production.</li>
+    <li><strong>Scan on push:</strong> ECR scans each new image for known security vulnerabilities (CVEs) and shows the results, so others can check an image before using it.</li>
+  </ul>
+  <p>The same thing from the <a href="12-aws-cli.html">AWS CLI</a>:</p>
+<pre><code>aws ecr create-repository \
+  --repository-name demo-app-repo \
+  --image-tag-mutability IMMUTABLE \
+  --image-scanning-configuration scanOnPush=true \
+  --region us-east-1</code></pre>
+  <div class="callout warn"><span class="callout-title">Watch out</span>ECR isn't free beyond the free tier. You pay for stored image data and data transfer. Delete demo repositories and images when you finish.</div>
+
+  <h2>Pushing your first image</h2>
+  <p>Open the repository and click <strong>View push commands</strong>. AWS shows the exact commands for macOS/Linux and for Windows (PowerShell). Here's what each one does.</p>
+
+  <h3>0. Have the AWS CLI configured</h3>
+  <p>The login step uses the AWS CLI, so install it and run <code>aws configure</code> with your access key, secret key and default region. Full setup is in <a href="12-aws-cli.html">Lesson 12: AWS CLI</a>.</p>
+
+  <h3>1. Log Docker in to ECR</h3>
+<pre><code>aws ecr get-login-password --region us-east-1 \
+  | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com</code></pre>
+  <ul>
+    <li><code>aws ecr get-login-password</code> asks AWS for a temporary password (valid for 12 hours) using your IAM credentials.</li>
+    <li>The pipe <code>|</code> passes that output as the input to the next command.</li>
+    <li><code>docker login</code> normally logs in to <code>docker.io</code> (Docker Hub). Giving it your registry address, <code>&lt;account-id&gt;.dkr.ecr.&lt;region&gt;.amazonaws.com</code>, points it at ECR instead. The username is always <code>AWS</code>.</li>
+  </ul>
+
+  <h3>2. Build the image</h3>
+<pre><code>docker build -t demo-app-repo .</code></pre>
+
+  <h3>3. Tag it with the repository address</h3>
+<pre><code>docker tag demo-app-repo:latest 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:latest</code></pre>
+  <p>The tag tells Docker where the image belongs: <code>registry/repository:tag</code>. Without it, Docker wouldn't know to send the image to your ECR repo.</p>
+
+  <h3>4. Push</h3>
+<pre><code>docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:latest</code></pre>
+  <p>Refresh the repository in the console and your image appears. Anyone with the right IAM permissions can now pull it from anywhere:</p>
+<pre><code>docker pull 123456789012.dkr.ecr.us-east-1.amazonaws.com/demo-app-repo:latest</code></pre>
+
+  <div class="demo" id="demo-ecr">
+    <div class="demo-head">Try it: ECR push command builder</div>
+    <div class="demo-body">
+      <p>Fill in your details to generate the exact commands.</p>
+      <div class="row">
+        <label style="flex:1 1 150px">Account ID<br><input type="text" id="ecr-acct" value="123456789012" inputmode="numeric" maxlength="12" style="width:100%"></label>
+        <label style="flex:1 1 150px">Region<br>
+          <select id="ecr-region" style="width:100%">
+            <option>us-east-1</option><option>us-west-2</option><option>eu-west-1</option><option>eu-central-1</option><option>ap-south-1</option><option>ap-southeast-1</option><option>ap-southeast-2</option>
+          </select></label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label style="flex:1 1 150px">Repository name<br><input type="text" id="ecr-repo" value="demo-app-repo" style="width:100%"></label>
+        <label style="flex:1 1 150px">Tag<br><input type="text" id="ecr-tag" value="latest" style="width:100%"></label>
+      </div>
+      <div class="output" id="ecr-msg"></div>
+      <pre style="margin-top:10px;white-space:pre-wrap;word-break:break-all"><code id="ecr-cmds"></code></pre>
+      <div class="row"><button class="btn" id="ecr-copy" type="button">Copy commands</button></div>
+    </div>
+  </div>
+
+  <h2>Permissions: when <code>docker push</code> fails</h2>
+  <p>If you use the root account in a demo, everything just works. In real life you use an IAM user or role, and it needs ECR permissions. Typical errors are "no basic auth credentials" (you didn't log in, or the 12-hour token expired) or "not authorized to perform ecr:…" (missing permissions).</p>
+  <ul>
+    <li>Go to <strong>IAM → your user/role → Add permissions → Attach policies directly</strong> and search "ECR".</li>
+    <li>AWS managed policies such as <code>AmazonEC2ContainerRegistryReadOnly</code> (pull only) or <code>AmazonEC2ContainerRegistryPowerUser</code> (push and pull) cover most needs.</li>
+    <li>Follow least privilege: CI pipelines that build images need push. Servers that only run images need pull.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Tip</span>The CI/CD project in <a href="16-codebuild-ci.html">Lesson 16</a> pushes to Docker Hub. You can swap it for ECR: give the CodeBuild role ECR push permissions and replace the login/push steps with the commands above.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What is the main reason companies on AWS prefer ECR over Docker Hub for internal images?</div>
+    <div class="opts"><button>ECR images run faster</button><button>ECR is private by default and uses existing IAM users, roles and policies</button><button>Docker Hub can't store private images</button></div>
+    <div class="explain">Docker Hub does offer private repos, but ECR plugs into the IAM setup you already have and integrates tightly with ECS, EKS and other AWS services.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">In <code>aws ecr get-login-password | docker login …</code>, what does the pipe do?</div>
+    <div class="opts"><button>Runs both commands at the same time on different servers</button><button>Saves the password to a file</button><button>Passes the temporary password output as input to <code>docker login</code></button></div>
+    <div class="explain">The pipe sends the first command's output (the token) into the second command, which reads it with <code>--password-stdin</code>.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which repository setting stops someone from overwriting <code>v1.0</code> with a different image?</div>
+    <div class="opts"><button>Tag immutability</button><button>Scan on push</button><button>Public visibility</button></div>
+    <div class="explain">With tag immutability on, a pushed tag can't be replaced, so a version label always points to the same image.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>An <strong>image</strong> is the template, a <strong>container</strong> is a running copy, and a <strong>registry</strong> stores images in <strong>repositories</strong> by tag.</li>
+      <li>ECR = Elastic Container Registry: AWS's managed, scalable, private-by-default registry.</li>
+      <li>Pick ECR for company images on AWS (IAM integration, ECS/EKS integration, AWS support). Docker Hub suits public images.</li>
+      <li>The push flow: <code>get-login-password | docker login</code> → <code>build</code> → <code>tag</code> → <code>push</code>.</li>
+      <li>Turn on tag immutability and scan on push. Grant least-privilege ECR permissions and delete demo repos.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var acct = document.getElementById("ecr-acct");
+  var region = document.getElementById("ecr-region");
+  var repo = document.getElementById("ecr-repo");
+  var tag = document.getElementById("ecr-tag");
+  var msg = document.getElementById("ecr-msg");
+  var cmds = document.getElementById("ecr-cmds");
+
+  function build() {
+    var a = acct.value.trim(), r = region.value, rp = repo.value.trim(), t = tag.value.trim() || "latest";
+    var problems = [];
+    if (!/^\d{12}$/.test(a)) problems.push("Account ID must be exactly 12 digits.");
+    if (!/^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:\/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$/.test(rp)) problems.push("Repository names use lowercase letters, numbers, and . _ - / separators.");
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(t)) problems.push("Tags use letters, numbers, _ . - (max 128 chars).");
+    var reg = a + ".dkr.ecr." + r + ".amazonaws.com";
+    var full = reg + "/" + rp + ":" + t;
+    if (problems.length) {
+      msg.className = "output bad";
+      msg.textContent = problems.join(" ");
+    } else {
+      msg.className = "output ok";
+      msg.innerHTML = "Registry: <code></code><br>Full image name: <code></code>";
+      var codes = msg.querySelectorAll("code");
+      codes[0].textContent = reg; codes[1].textContent = full;
+    }
+    cmds.textContent =
+      "# 1. Log Docker in to your ECR registry\n" +
+      "aws ecr get-login-password --region " + r + " | docker login --username AWS --password-stdin " + reg + "\n\n" +
+      "# 2. Build the image locally\n" +
+      "docker build -t " + rp + " .\n\n" +
+      "# 3. Tag it with the repository address\n" +
+      "docker tag " + rp + ":latest " + full + "\n\n" +
+      "# 4. Push it to ECR\n" +
+      "docker push " + full + "\n\n" +
+      "# Later, anywhere with pull permission:\n" +
+      "docker pull " + full;
+  }
+  [acct, repo, tag].forEach(function (el) { el.addEventListener("input", build); });
+  region.addEventListener("change", build);
+  document.getElementById("ecr-copy").addEventListener("click", function () {
+    var btn = this, text = cmds.textContent;
+    function done(ok) { btn.textContent = ok ? "Copied!" : "Select and copy manually"; setTimeout(function () { btn.textContent = "Copy commands"; }, 1500); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else { done(false); }
+  });
+  build();
+})();
+</script>
+</body>
+</html>

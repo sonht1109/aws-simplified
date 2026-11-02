@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Route 53: DNS on AWS · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  #dns-map [data-k] { transition: opacity .25s; }
+  #dns-map.stepping [data-k] { opacity: .22; }
+  #dns-map.stepping [data-k].on { opacity: 1; }
+</style>
+</head>
+<body data-page="08">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Route 53: DNS on AWS</h1>
+    <p class="lead">People type names like <code>amazon.com</code>, but computers connect to IP addresses. DNS is the system that translates one into the other, and Route 53 is AWS's DNS service. Here you'll learn how DNS works and the three jobs Route 53 does: registering domains, storing DNS records in hosted zones, and running health checks.</p>
+  </header>
+
+  <h2>What is DNS?</h2>
+  <p><strong>DNS</strong> stands for <strong>Domain Name System</strong>. Every load balancer or server you create gets an <strong>IP address</strong>, such as <code>3.6.10.171</code>. Yet you never type IP addresses to visit Amazon, Flipkart or Instagram — you type a <strong>domain name</strong>. Something has to turn the name into the IP address. That something is DNS. We say DNS <strong>resolves</strong> a domain name to an IP address.</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>Your phone's contacts list. You tap "Mom", and the phone dials the number stored for that name. You don't need to remember the number, and if Mom changes her number you just update the contact.</div>
+  <p>Why not just share the IP address?</p>
+  <ol>
+    <li><strong>Names are easy to remember</strong>; numbers aren't. Imagine memorising an IP for every app you use.</li>
+    <li><strong>IP addresses change.</strong> Restart a server without a fixed (static) IP, or replace a load balancer, and the address can be different. The name stays the same — you only update the DNS record.</li>
+  </ol>
+  <p>In real setups, a domain name usually points to the <strong>load balancer</strong> in your VPC, not straight to a server.</p>
+
+  <h2>Route 53: DNS as a service</h2>
+  <p>Just as EC2 gives you "compute as a service", <strong>Route 53</strong> gives you "DNS as a service". (The name comes from <strong>port 53</strong>, the port DNS uses.)</p>
+  <p>Without it, putting an app online the traditional way means: buy a domain from a seller like GoDaddy, find hosting somewhere else, and maintain DNS records yourself. If your app already runs on AWS, Route 53 lets you do it all in one place.</p>
+  <p>In the architecture you've been drawing since <a href="06-vpc.html">Lesson 6</a>, Route 53 sits <strong>in front</strong> of everything: the user asks Route 53 for the address of <code>example.com</code>, gets the load balancer's IP, and from there the request flows through the internet gateway as before.</p>
+
+  <h2>How a DNS lookup works</h2>
+  <p>A lookup takes a few hops behind the scenes, usually in milliseconds. Step through it:</p>
+
+  <figure class="diagram">
+    <svg id="dns-map" viewBox="0 0 700 320" role="img" aria-label="DNS lookup: the browser asks a resolver, which asks a root server, then the .com TLD server, then Route 53 name servers that hold the hosted zone. The answer is the load balancer IP.">
+      <defs><marker id="arr8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <g data-k="l-br"><path class="s-line" d="M124 148 H176" marker-end="url(#arr8)"/></g>
+      <g data-k="l-root"><path class="s-line" d="M300 136 L418 50" marker-end="url(#arr8)"/></g>
+      <g data-k="l-tld"><path class="s-line" d="M300 148 H418" marker-end="url(#arr8)"/></g>
+      <g data-k="l-r53"><path class="s-line" d="M300 160 L418 240" marker-end="url(#arr8)"/></g>
+      <g data-k="l-lb"><path class="s-line-o" d="M66 180 V226" marker-end="url(#arr8)"/></g>
+      <g data-k="br">
+        <rect class="s-box2" x="8" y="120" width="116" height="58" rx="8"/>
+        <text class="s-text-b" x="66" y="145" text-anchor="middle">Browser</text>
+        <text class="s-text-s" x="66" y="164" text-anchor="middle">+ OS cache</text>
+      </g>
+      <g data-k="res">
+        <rect class="s-blue" x="178" y="120" width="122" height="58" rx="8"/>
+        <text class="s-text-b" x="239" y="145" text-anchor="middle">Resolver</text>
+        <text class="s-text-s" x="239" y="164" text-anchor="middle">ISP / 8.8.8.8</text>
+      </g>
+      <g data-k="root">
+        <rect class="s-box" x="420" y="16" width="270" height="56" rx="8"/>
+        <text class="s-text-b" x="555" y="40" text-anchor="middle">Root server</text>
+        <text class="s-text-s" x="555" y="58" text-anchor="middle">"ask the .com servers"</text>
+      </g>
+      <g data-k="tld">
+        <rect class="s-box" x="420" y="120" width="270" height="56" rx="8"/>
+        <text class="s-text-b" x="555" y="144" text-anchor="middle">.com TLD server</text>
+        <text class="s-text-s" x="555" y="162" text-anchor="middle">"ask ns-…awsdns-….com"</text>
+      </g>
+      <g data-k="r53">
+        <rect class="s-orange-soft" x="420" y="214" width="270" height="92" rx="8"/>
+        <text class="s-text-b" x="555" y="238" text-anchor="middle">Route 53 name servers</text>
+        <text class="s-text-s" x="555" y="258" text-anchor="middle">hosted zone: example.com</text>
+        <text class="s-text-s" x="555" y="278" text-anchor="middle">shop  A (alias) → load balancer</text>
+      </g>
+      <g data-k="lb">
+        <rect class="s-green" x="8" y="228" width="116" height="58" rx="8"/>
+        <text class="s-text-b" x="66" y="253" text-anchor="middle">Load balancer</text>
+        <text class="s-text-s" x="66" y="272" text-anchor="middle">3.6.10.171</text>
+      </g>
+    </svg>
+    <figcaption>The resolver walks the DNS tree on your behalf: root → top-level domain → the domain's own name servers (Route 53).</figcaption>
+  </figure>
+
+  <div class="demo" id="demo-dns">
+    <div class="demo-head">Try it: resolve shop.example.com</div>
+    <div class="demo-body">
+      <div class="row">
+        <button class="btn" id="d-prev">◀ Back</button>
+        <button class="btn primary" id="d-next">Next step ▶</button>
+        <button class="btn" id="d-reset">Reset</button>
+      </div>
+      <div class="output" id="d-out">Press <b>Next step</b> to type <code>shop.example.com</code> into the browser.</div>
+    </div>
+  </div>
+
+  <h2>Route 53's three main jobs</h2>
+
+  <h3>1. Domain registration</h3>
+  <p>First you need to own a domain name. Search for the name you want (<code>myapp.com</code> taken? Try <code>myapp.in</code> or <code>myapp.xyz</code>), then buy it. With Route 53 you can:</p>
+  <ul>
+    <li><strong>Buy the domain from AWS.</strong> You pay upfront, usually per year — this part is not pay-as-you-go. Route 53 sets up the hosted zone for you.</li>
+    <li><strong>Keep a domain bought elsewhere</strong> (e.g. GoDaddy years ago). Create a hosted zone in Route 53, then copy its four <strong>name server (NS)</strong> records into your registrar's settings so the internet knows Route 53 now answers for your domain.</li>
+  </ul>
+
+  <h3>2. Hosted zones and DNS records</h3>
+  <p>A <strong>hosted zone</strong> is a container for all the DNS records of one domain — the actual "name → address" list. When a lookup arrives, Route 53 finds the hosted zone and checks its records.</p>
+  <ul>
+    <li><strong>Public hosted zone</strong> — answers questions from anywhere on the internet.</li>
+    <li><strong>Private hosted zone</strong> — answers only from inside the VPCs you attach it to, handy for internal names like <code>db.internal</code>.</li>
+  </ul>
+  <p>The records you'll meet most:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Type</th><th>Points a name to…</th><th>Example</th></tr>
+    <tr><td><strong>A</strong></td><td>an IPv4 address</td><td><code>app.example.com → 3.6.10.171</code></td></tr>
+    <tr><td><strong>AAAA</strong></td><td>an IPv6 address</td><td><code>app.example.com → 2600:1f18::1</code></td></tr>
+    <tr><td><strong>CNAME</strong></td><td>another name (an alias for a name)</td><td><code>www.example.com → example.com</code></td></tr>
+    <tr><td><strong>Alias</strong> (Route 53 only)</td><td>an AWS resource such as a load balancer, CloudFront or S3 website; follows its IPs automatically and works at the root domain</td><td><code>example.com → my-alb-123.elb.amazonaws.com</code></td></tr>
+    <tr><td><strong>MX</strong></td><td>mail servers for the domain</td><td><code>example.com → 10 mail.example.com</code></td></tr>
+    <tr><td><strong>NS</strong></td><td>the name servers that answer for the domain</td><td><code>ns-123.awsdns-45.com</code></td></tr>
+    <tr><td><strong>TXT</strong></td><td>free text, often for proving you own a domain</td><td><code>"google-site-verification=…"</code></td></tr>
+  </table></div>
+  <div class="callout tip"><span class="callout-title">Tip</span>Pointing a domain at a load balancer? Use an <strong>Alias A record</strong>. A load balancer's IPs can change over time, and an alias follows them for you. A CNAME also works for subdomains, but can't be used on the bare root domain (<code>example.com</code>).</div>
+  <p>Each record also has a <strong>TTL</strong> (time to live): how many seconds resolvers may cache the answer. Long TTL = fewer lookups; short TTL = changes spread faster.</p>
+
+  <h3>3. Health checks</h3>
+  <p>Route 53 can regularly send requests to your endpoints (for example every 30 seconds) to see if they're alive. Say your app runs on web servers in two Availability Zones: if one stops answering, Route 53 can stop handing out its address and send everyone to the healthy one. Health checks can also trigger alarms.</p>
+
+  <h3>Routing policies</h3>
+  <p>When a record has more than one possible answer, a <strong>routing policy</strong> decides which answer Route 53 gives. Pick one to see what it does:</p>
+  <div class="demo" id="demo-policy">
+    <div class="demo-head">Try it: routing policy picker</div>
+    <div class="demo-body">
+      <div class="row" id="pol-btns">
+        <button class="btn" data-p="simple">Simple</button>
+        <button class="btn" data-p="weighted">Weighted</button>
+        <button class="btn" data-p="latency">Latency</button>
+        <button class="btn" data-p="failover">Failover</button>
+        <button class="btn" data-p="geo">Geolocation</button>
+        <button class="btn" data-p="multi">Multivalue</button>
+      </div>
+      <div class="output" id="pol-out">Choose a policy.</div>
+    </div>
+  </div>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"What happens when you type a URL in a browser?" starts with DNS. Mention caching, the resolver, root → TLD → authoritative name servers (Route 53), the record type that's returned, and then the request going to the load balancer.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What is the main job of DNS?</div>
+    <div class="opts"><button>Spread traffic evenly across servers</button><button>Translate domain names into IP addresses</button><button>Encrypt traffic between browser and server</button></div>
+    <div class="explain">DNS resolves names like example.com to IP addresses. Spreading traffic is a load balancer's job.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">You bought <code>myapp.com</code> on GoDaddy and want Route 53 to manage its DNS. What do you do?</div>
+    <div class="opts"><button>Nothing — Route 53 detects it automatically</button><button>Create a security group for the domain</button><button>Create a hosted zone in Route 53 and set its NS records at GoDaddy</button></div>
+    <div class="explain">The registrar must point the domain at Route 53's name servers, which serve the records in your hosted zone.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which record type is best for pointing <code>example.com</code> at an AWS load balancer?</div>
+    <div class="opts"><button>Alias A record</button><button>MX record</button><button>TXT record</button></div>
+    <div class="explain">An Alias record points at AWS resources, tracks their changing IPs and works at the root domain.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><strong>DNS</strong> resolves easy names into IP addresses, which are hard to remember and can change.</li>
+      <li><strong>Route 53</strong> is AWS's DNS service and sits in front of your load balancer.</li>
+      <li>Its three jobs: <strong>domain registration</strong>, <strong>hosted zones</strong> with DNS records, and <strong>health checks</strong>.</li>
+      <li>Common records: <strong>A</strong>, <strong>AAAA</strong>, <strong>CNAME</strong>, <strong>Alias</strong>, <strong>MX</strong>, <strong>NS</strong>, <strong>TXT</strong>. Use Alias for AWS resources.</li>
+      <li><strong>Routing policies</strong> (simple, weighted, latency, failover, geolocation, multivalue) decide which answer is returned.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  /* DNS lookup step-through */
+  var svg = document.getElementById("dns-map"), out = document.getElementById("d-out");
+  var groups = svg.querySelectorAll("[data-k]");
+  var steps = [
+    { on: ["br"], t: "1. You type <code>shop.example.com</code>. The browser and operating system first check their <b>cache</b>: did we look this up recently? Not this time." },
+    { on: ["br", "l-br", "res"], t: "2. The question goes to a <b>DNS resolver</b> — usually run by your internet provider, or a public one like 8.8.8.8. The resolver does the legwork for you." },
+    { on: ["res", "l-root", "root"], t: "3. The resolver asks a <b>root server</b>. It doesn't know the answer, but it knows who handles <code>.com</code>." },
+    { on: ["res", "l-tld", "tld"], t: "4. The <b>.com TLD server</b> says: “example.com is handled by these name servers: ns-…awsdns-….” Those NS records were set when the domain was registered." },
+    { on: ["res", "l-r53", "r53"], t: "5. <b>Route 53's name servers</b> look in the <b>hosted zone</b> for example.com, find the record for <code>shop</code> (an Alias A record pointing to the load balancer) and reply with its IP: <code>3.6.10.171</code>." },
+    { on: ["br", "l-br", "res"], t: "6. The resolver passes the answer back and <b>caches</b> it for the record's TTL, so the next lookup is instant." },
+    { on: ["br", "l-lb", "lb"], t: "7. Now the browser connects to <code>3.6.10.171</code> — the <b>load balancer</b> — and the request continues into your VPC. Done!" }
+  ];
+  var i = -1;
+  function render() {
+    if (i < 0) { svg.classList.remove("stepping"); out.innerHTML = "Press <b>Next step</b> to type <code>shop.example.com</code> into the browser."; return; }
+    svg.classList.add("stepping");
+    Array.prototype.forEach.call(groups, function (g) { g.classList.toggle("on", steps[i].on.indexOf(g.getAttribute("data-k")) >= 0); });
+    out.innerHTML = steps[i].t + ' <span class="muted">(' + (i + 1) + "/" + steps.length + ")</span>";
+  }
+  document.getElementById("d-next").addEventListener("click", function () { if (i < steps.length - 1) i++; render(); });
+  document.getElementById("d-prev").addEventListener("click", function () { if (i > -1) i--; render(); });
+  document.getElementById("d-reset").addEventListener("click", function () { i = -1; render(); });
+
+  /* Routing policy picker */
+  var P = {
+    simple: ["Simple", "One record, one answer (or a few IPs returned in random order). No health checks.", "A small site with a single load balancer."],
+    weighted: ["Weighted", "Split traffic by percentages you choose, e.g. 90% to the current version and 10% to the new one.", "Testing a new release on a small slice of users."],
+    latency: ["Latency-based", "Send each user to the AWS region that answers them fastest.", "App deployed in Mumbai and Ohio: Indian users go to Mumbai, US users to Ohio."],
+    failover: ["Failover", "Answer with the primary resource while its health check passes; switch to the secondary if it fails.", "Disaster recovery: a backup site takes over when the main one is down."],
+    geo: ["Geolocation", "Answer based on where the user is (country or continent).", "Show a localized site or follow data laws for users in the EU."],
+    multi: ["Multivalue answer", "Return up to 8 healthy IPs at random, each with its own health check.", "Simple client-side spreading across several servers."]
+  };
+  var outP = document.getElementById("pol-out");
+  Array.prototype.forEach.call(document.querySelectorAll("#pol-btns .btn"), function (b) {
+    b.addEventListener("click", function () {
+      Array.prototype.forEach.call(document.querySelectorAll("#pol-btns .btn"), function (x) { x.classList.remove("active"); x.setAttribute("aria-pressed", "false"); });
+      b.classList.add("active"); b.setAttribute("aria-pressed", "true");
+      var p = P[b.getAttribute("data-p")];
+      outP.innerHTML = "<b>" + p[0] + ":</b> " + p[1] + "<br><span class=\"muted\">Use it for: " + p[2] + "</span>";
+    });
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project: E-Commerce App on EKS · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  #ms-svg .ms { cursor: pointer; transition: opacity .15s; }
+  #ms-svg .ms:focus { outline: none; }
+  #ms-svg .ms.sel rect { stroke: var(--orange); stroke-width: 3.5; }
+  #ms-svg .ms.rel rect { stroke: var(--orange); stroke-width: 2; stroke-dasharray: 5 3; }
+  #ms-svg.focus .ms:not(.sel):not(.rel) { opacity: .35; }
+</style>
+</head>
+<body data-page="33">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Project: E-Commerce App on EKS</h1>
+    <p class="lead">Deploy <em>Robot Shop</em>, a demo online store made of many microservices and several databases, onto Amazon EKS. You'll see how a three-tier app maps to Kubernetes, why microservices exist, and which extra AWS plumbing a real cluster needs.</p>
+  </header>
+
+  <div class="xref-box"><div>This is a hands-on project. The three-tier idea is explained in <a href="32-three-tier-architecture.html">Lesson 32</a>, and Kubernetes objects (pods, deployments, services, ingress), OIDC and the AWS Load Balancer Controller are covered in <a href="24-eks.html">Lesson 24: EKS</a>. This page focuses on what's new.</div></div>
+
+  <h2>The project: Robot Shop</h2>
+  <p>Robot Shop is an open-source demo store (originally built by IBM's Instana team to show off monitoring) that sells robots and AI products. It behaves like a real shop: register, log in, browse a catalogue, see ratings, add to cart, calculate shipping, pay, and get an order ID.</p>
+  <p>It's a great learning project because:</p>
+  <ul>
+    <li>It's split into <strong>many small services</strong>, each written in a <strong>different language</strong> (Node.js, Java, Python, PHP, Go). You get to see a Dockerfile for each kind of app.</li>
+    <li>It uses <strong>several data stores</strong>: MongoDB, MySQL, Redis and RabbitMQ.</li>
+    <li>The flow (catalogue → cart → shipping → payment) is the same one Amazon or Flipkart uses, so the high-level design carries over to real shops.</li>
+  </ul>
+  <p>Its three tiers: the <strong>presentation</strong> tier is the web UI (AngularJS served by Nginx), the <strong>logic</strong> tier is the set of microservices, and the <strong>data</strong> tier is the databases.</p>
+
+  <h2>Monolith vs microservices</h2>
+  <p>Catalogue, ratings, cart, payment and shipping all need their own code. Developers can package it in two ways:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Monolith</h3><p>All features in <strong>one application / one binary</strong>. Simple at first, but a change to the catalogue can break payments, so QA has to re-test <em>everything</em> (regression testing) on every release.</p></div>
+    <div class="card"><h3>Microservices</h3><p>Each feature is a <strong>separate service with its own API</strong>, deployed on its own. The catalogue team changes and tests only the catalogue. Large companies run hundreds or thousands of these.</p></div>
+  </div>
+  <p>Each microservice can use the language that suits it best. A company might write 998 services in Go and two in Python. Robot Shop uses many languages on purpose, for teaching. In a real company each service would usually live in its <strong>own Git repository</strong>; Robot Shop keeps them in one repo because it's small.</p>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A food court instead of one giant kitchen. Each stall (service) has its own staff and menu. If the pizza stall changes its recipe, the noodle stall keeps cooking unaffected.</div>
+
+  <div class="demo" id="demo-ms">
+    <div class="demo-head">Try it: Robot Shop microservices map</div>
+    <div class="demo-body">
+      <p>Tap a box to see what it does, its language, and what it talks to. Or press <strong>Follow an order</strong> to step through a purchase.</p>
+      <svg id="ms-svg" viewBox="0 0 700 360" role="img" aria-label="Robot Shop components grouped into presentation, logic and data tiers">
+        <rect class="s-blue" x="4" y="4" width="692" height="66" rx="10"/>
+        <text class="s-text-s" x="14" y="22">Presentation</text>
+        <rect class="s-green" x="4" y="80" width="692" height="166" rx="10"/>
+        <text class="s-text-s" x="14" y="98">Logic (microservices)</text>
+        <rect class="s-purple" x="4" y="256" width="692" height="96" rx="10"/>
+        <text class="s-text-s" x="14" y="274">Data</text>
+      </svg>
+      <div class="row" style="margin-top:8px">
+        <button class="btn primary" id="ms-order">Follow an order</button>
+        <button class="btn" id="ms-next" disabled>Next step</button>
+        <button class="btn" id="ms-reset">Reset</button>
+      </div>
+      <div class="output" id="ms-out">Tap a component above.</div>
+    </div>
+  </div>
+
+  <p>That adds up to <strong>12 components</strong>: web, 7 microservices, 2 databases, Redis and RabbitMQ. Each one gets its own Kubernetes Deployment (or StatefulSet) and Service.</p>
+  <ul>
+    <li><strong>Why Redis for the cart?</strong> If you add an item, log out and come back days later, the item should still be there. Keeping the cart only in the app's own memory would lose it whenever the pod restarts. Redis is an <em>in-memory data store</em>: very fast, and it can save its data to disk. Run it as a StatefulSet with a persistent volume and the cart survives restarts. (Caching in general: <a href="39-elasticache-valkey.html">Lesson 39</a>.)</li>
+    <li><strong>Why two databases?</strong> MongoDB (document DB) and MySQL (relational DB) are both used so you can practise deploying each kind on Kubernetes. A real app could use just one.</li>
+    <li><strong>Why RabbitMQ?</strong> It's a <em>message queue</em>. When you pay, the payment service drops the order into a queue and returns right away. The dispatch service picks orders up in the background. If dispatch is slow or down, orders wait in the queue instead of being lost.</li>
+  </ul>
+
+  <h2>What's new compared with the 2048 game (Lesson 24)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Topic</th><th>2048 game (L24)</th><th>Robot Shop (this lesson)</th></tr>
+    <tr><td>App shape</td><td>One container, two-tier</td><td>12 components, three-tier, microservices</td></tr>
+    <tr><td>Worker nodes</td><td>Fargate (serverless pods)</td><td><strong>EC2 nodes</strong></td></tr>
+    <tr><td>Storage</td><td>None (stateless)</td><td>Persistent volumes on <strong>EBS</strong> via the EBS CSI driver</td></tr>
+    <tr><td>Packaging</td><td>Plain YAML manifests</td><td>A <strong>Helm chart</strong></td></tr>
+    <tr><td>Exposure</td><td>Ingress → ALB</td><td>Same: Ingress → ALB (via the AWS Load Balancer Controller)</td></tr>
+  </table></div>
+  <p><strong>Why EC2 nodes instead of Fargate?</strong> Two reasons. The Redis pod is given the extra Linux privilege <code>NET_ADMIN</code>, which Fargate doesn't allow, and Fargate pods can't mount EBS volumes. Stateful workloads like this need EC2 nodes.</p>
+
+  <h3>Persistent storage: StatefulSet → PVC → EBS</h3>
+  <p>A normal pod loses its files when it's replaced. Redis needs its data to survive, so it runs as a <strong>StatefulSet</strong>, a Kubernetes object for stateful apps that gives each pod a stable name and its own disk. The pieces:</p>
+  <ul>
+    <li><strong>PersistentVolumeClaim (PVC):</strong> the pod's request: "I need 1 GiB of disk."</li>
+    <li><strong>StorageClass:</strong> describes <em>how</em> to make that disk (on AWS: an EBS volume of type gp2/gp3).</li>
+    <li><strong>EBS CSI driver:</strong> the add-on that actually calls AWS to create the EBS volume and attach it to the node. Without it, the PVC stays <code>Pending</code> forever.</li>
+  </ul>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 170" role="img" aria-label="Redis StatefulSet requests storage via a PVC; the StorageClass and EBS CSI driver create an EBS volume using IAM permissions">
+      <defs><marker id="arr33" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-green" x="10" y="40" width="130" height="56" rx="8"/>
+      <text class="s-text-b" x="75" y="65" text-anchor="middle">Redis pod</text>
+      <text class="s-text-s" x="75" y="84" text-anchor="middle">StatefulSet</text>
+      <path class="s-line" d="M140 68 H178" marker-end="url(#arr33)"/>
+      <rect class="s-box" x="180" y="40" width="120" height="56" rx="8"/>
+      <text class="s-text-b" x="240" y="65" text-anchor="middle">PVC</text>
+      <text class="s-text-s" x="240" y="84" text-anchor="middle">"I need a disk"</text>
+      <path class="s-line" d="M300 68 H338" marker-end="url(#arr33)"/>
+      <rect class="s-box" x="340" y="40" width="150" height="56" rx="8"/>
+      <text class="s-text-b" x="415" y="65" text-anchor="middle">StorageClass</text>
+      <text class="s-text-s" x="415" y="84" text-anchor="middle">+ EBS CSI driver</text>
+      <path class="s-line-o" d="M490 68 H548" marker-end="url(#arr33)"/>
+      <rect class="s-orange-soft" x="550" y="40" width="140" height="56" rx="8"/>
+      <text class="s-text-b" x="620" y="65" text-anchor="middle">EBS volume</text>
+      <text class="s-text-s" x="620" y="84" text-anchor="middle">attached to node</text>
+      <rect class="s-purple" x="320" y="120" width="190" height="40" rx="8"/>
+      <text class="s-text-b" x="415" y="145" text-anchor="middle">IAM role (via OIDC)</text>
+      <path class="s-line" d="M415 120 V98" marker-end="url(#arr33)"/>
+      <text class="s-text-s" x="10" y="24">Kubernetes</text>
+      <text class="s-text-s" x="690" y="24" text-anchor="end">AWS</text>
+    </svg>
+    <figcaption>The EBS CSI driver needs IAM permission to create volumes. It gets it through an IAM role linked to its Kubernetes service account.</figcaption>
+  </figure>
+
+  <h3>Helm in one minute</h3>
+  <p><strong>Helm</strong> is a package manager for Kubernetes. A <em>Helm chart</em> is a folder with:</p>
+  <ul>
+    <li><code>Chart.yaml</code>: the chart's name and version.</li>
+    <li><code>values.yaml</code>: settings you might change, such as the image repository and tag.</li>
+    <li><code>templates/</code>: the Kubernetes YAML files (a Deployment + Service per component), with placeholders filled in from <code>values.yaml</code>.</li>
+  </ul>
+  <p>Why bother? Robot Shop has 12+ manifests that all pull images from the same repository. To switch every image to a new repo or version, you change one line in <code>values.yaml</code> instead of editing 12 files. One <code>helm install</code> deploys everything.</p>
+
+  <h2>Step-by-step deployment</h2>
+  <p><strong>Prerequisites:</strong> <code>kubectl</code>, <code>eksctl</code>, <code>helm</code> and the <a href="12-aws-cli.html">AWS CLI</a> installed and configured. Start the cluster first, because it takes 15–20 minutes.</p>
+
+  <ol class="steps">
+    <li><strong>Create the cluster (EC2 nodes).</strong>
+<pre><code>eksctl create cluster --name demo-cluster-robot-shop --region us-east-1</code></pre>
+    If the default region of your AWS CLI differs from the cluster's region, later commands fail with confusing "not found" errors. Run <code>aws configure</code> and set the same region, or pass <code>--region</code> everywhere.</li>
+
+    <li><strong>Connect the cluster to IAM (OIDC provider).</strong> This lets Kubernetes service accounts use IAM roles, so pods like the load balancer controller and the EBS CSI driver can call AWS APIs.
+<pre><code>export cluster_name=demo-cluster-robot-shop
+oidc_id=$(aws eks describe-cluster --name $cluster_name \
+  --query "cluster.identity.oidc.issuer" --output text | cut -d '/' -f 5)
+aws iam list-open-id-connect-providers | grep $oidc_id   # empty = not created yet
+eksctl utils associate-iam-oidc-provider --cluster $cluster_name --approve</code></pre></li>
+
+    <li><strong>Install the AWS Load Balancer Controller.</strong> It watches Ingress objects and creates ALBs for them. Create the IAM policy, a service account linked to an IAM role, then install with Helm:
+<pre><code>curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.5.4/docs/install/iam_policy.json
+aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy \
+  --policy-document file://iam_policy.json
+
+eksctl create iamserviceaccount --cluster=$cluster_name --namespace=kube-system \
+  --name=aws-load-balancer-controller --role-name AmazonEKSLoadBalancerControllerRole \
+  --attach-policy-arn=arn:aws:iam::&lt;ACCOUNT_ID&gt;:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve
+
+helm repo add eks https://aws.github.io/eks-charts
+helm repo update eks
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller -n kube-system \
+  --set clusterName=$cluster_name --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=us-east-1 --set vpcId=&lt;VPC_ID&gt;
+
+kubectl get deployment -n kube-system aws-load-balancer-controller</code></pre>
+    Find the VPC ID under your cluster's <em>Networking</em> tab. <strong>Wait until the controller pods are running</strong> before moving on. It installs in <code>kube-system</code> because one controller watches all namespaces.</li>
+
+    <li><strong>Install the EBS CSI driver add-on</strong>, so Redis (and the databases) can get EBS volumes:
+<pre><code>eksctl create iamserviceaccount --name ebs-csi-controller-sa --namespace kube-system \
+  --cluster $cluster_name --role-name AmazonEKS_EBS_CSI_DriverRole --role-only \
+  --attach-policy-arn arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy \
+  --approve
+
+eksctl create addon --name aws-ebs-csi-driver --cluster $cluster_name \
+  --service-account-role-arn arn:aws:iam::&lt;ACCOUNT_ID&gt;:role/AmazonEKS_EBS_CSI_DriverRole --force</code></pre></li>
+
+    <li><strong>Deploy Robot Shop with Helm.</strong> From the project's <code>EKS/helm</code> folder:
+<pre><code>kubectl create ns robot-shop
+helm install robot-shop --namespace robot-shop .
+kubectl get pods -n robot-shop      # wait until all pods are Running (can take 5–10 min)</code></pre></li>
+
+    <li><strong>Expose the web UI with an Ingress.</strong> The <code>web</code> Service listens on port 8080; the Ingress tells the controller to put an internet-facing ALB in front of it:
+<pre><code>apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: robot-shop
+  namespace: robot-shop
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 8080</code></pre>
+<pre><code>kubectl apply -f ingress.yaml
+kubectl get ingress -n robot-shop</code></pre>
+    In the EC2 console under <em>Load Balancers</em>, wait for the new ALB to change from <em>Provisioning</em> to <em>Active</em>, then open its DNS name in the browser.</li>
+
+    <li><strong>Test every workflow:</strong> register, log in, browse, rate, add to cart, ship, pay, get an order ID.</li>
+
+    <li><strong>Clean up.</strong> EC2 nodes, EBS volumes and ALBs cost money:
+<pre><code>eksctl delete cluster --name $cluster_name --region us-east-1</code></pre></li>
+  </ol>
+
+  <div class="callout warn"><span class="callout-title">Watch out</span><code>eksctl create iamserviceaccount</code> works through a CloudFormation stack. If it fails, a retry will keep failing until you <strong>delete the failed stack</strong> in the CloudFormation console. Also, commands copied from Markdown sometimes get "smart" dashes; if a flag is rejected, retype the <code>--</code>.</div>
+  <div class="callout tip"><span class="callout-title">Tip</span>A Service of type <code>LoadBalancer</code> also exposes an app, but you get one load balancer per service. Ingress + ALB controller is the more common approach: one ALB can route to many services by path or host.</div>
+
+  <h2>What about CI/CD?</h2>
+  <p>Once you understand the architecture and the Dockerfiles, a pipeline is straightforward. The key rule: <strong>one CI/CD pipeline per microservice</strong>. Robot Shop would need about 12. One pipeline for everything defeats the purpose of deploying independently. Likewise, a real setup would usually have a Helm chart per service rather than one big chart. Practise by building one pipeline, for example for the Go <em>dispatch</em> or Python <em>payment</em> service. (<a href="14-cicd-codecommit.html">CI/CD concepts</a>)</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Why is Redis a StatefulSet, and how does it get storage on EKS?" Answer: a StatefulSet gives stable identity and a dedicated volume. The PVC is fulfilled by a StorageClass backed by the EBS CSI driver, which uses an IAM role (via OIDC/IRSA) to create and attach the EBS volume.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Why did this project use EC2 worker nodes instead of Fargate?</div>
+    <div class="opts"><button>Fargate can't run Node.js containers</button><button>Redis needs EBS-backed persistent volumes and NET_ADMIN, which Fargate doesn't support</button><button>Ingress doesn't work with Fargate</button></div>
+    <div class="explain">Fargate pods can't mount EBS volumes or get extra privileges like NET_ADMIN. Ingress works fine with Fargate; Lesson 24 used it.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">A PVC for Redis stays in <code>Pending</code> forever. What's the most likely missing piece?</div>
+    <div class="opts"><button>The EBS CSI driver add-on (with its IAM role)</button><button>The Ingress resource</button><button>The Helm repository for the ALB controller</button></div>
+    <div class="explain">Without the EBS CSI driver, nothing creates the EBS volume the StorageClass asks for, so the claim is never fulfilled.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">What is the main benefit of microservices over a monolith?</div>
+    <div class="opts"><button>They always use less memory</button><button>Every service must be written in a different language</button><button>Each feature can be changed, tested and deployed on its own</button></div>
+    <div class="explain">Independent deployment is the point. Services can share a language or not; that's up to the team.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Robot Shop = web UI (presentation) + 7 microservices (logic) + MongoDB, MySQL, Redis, RabbitMQ (data): a realistic three-tier e-commerce app.</li>
+      <li>Microservices are deployed independently, so a change to one feature doesn't force re-testing the whole app.</li>
+      <li>Stateful pods need EC2 nodes, a StatefulSet, and the EBS CSI driver to turn PVCs into EBS volumes.</li>
+      <li>Setup order: cluster → OIDC → ALB controller → EBS CSI driver → <code>helm install</code> → Ingress → test → <strong>delete the cluster</strong>.</li>
+      <li>Helm keeps shared settings (image repo, versions) in <code>values.yaml</code>. In production, use one pipeline (and usually one chart) per microservice.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var C = {
+    web: { x: 230, y: 14, w: 240, h: 46, name: "web", sub: "Nginx + AngularJS", tier: "Presentation",
+      d: "The user interface you see in the browser. Nginx serves the AngularJS app and forwards API calls (/api/...) to the right microservice. This is the only Service exposed through the Ingress/ALB.",
+      links: ["user", "catalogue", "cart", "ratings", "shipping", "payment"] },
+    user: { x: 20, y: 106, w: 150, h: 48, name: "user", sub: "Node.js", tier: "Logic",
+      d: "Registration and login. Checks usernames and passwords against stored user records and keeps order history.",
+      links: ["mongodb", "redis"] },
+    catalogue: { x: 190, y: 106, w: 150, h: 48, name: "catalogue", sub: "Node.js", tier: "Logic",
+      d: "The product list: the two categories (Robots, Artificial Intelligence), product names, descriptions and prices.",
+      links: ["mongodb"] },
+    cart: { x: 360, y: 106, w: 150, h: 48, name: "cart", sub: "Node.js", tier: "Logic",
+      d: "Your shopping cart. Stored in Redis so it survives logouts and pod restarts. Looks up product details from catalogue.",
+      links: ["redis", "catalogue"] },
+    shipping: { x: 530, y: 106, w: 150, h: 48, name: "shipping", sub: "Java", tier: "Logic",
+      d: "Calculates distance and shipping cost to the chosen city, then adds it to the cart. Built with Maven in a multi-stage Dockerfile.",
+      links: ["mysql", "cart"] },
+    ratings: { x: 105, y: 172, w: 150, h: 48, name: "ratings", sub: "PHP", tier: "Logic",
+      d: "Shows and records product star ratings. A PHP app: a handy example of a PHP Dockerfile.",
+      links: ["mysql", "catalogue"] },
+    payment: { x: 275, y: 172, w: 150, h: 48, name: "payment", sub: "Python", tier: "Logic",
+      d: "Takes payment (a fake gateway in the demo), creates the order ID, empties the cart, and publishes the order to RabbitMQ.",
+      links: ["cart", "user", "rabbitmq"] },
+    dispatch: { x: 445, y: 172, w: 150, h: 48, name: "dispatch", sub: "Go", tier: "Logic",
+      d: "Works in the background: reads orders from the RabbitMQ queue and 'ships' them. Users never call it directly.",
+      links: ["rabbitmq"] },
+    mongodb: { x: 20, y: 284, w: 150, h: 50, name: "MongoDB", sub: "document DB", tier: "Data",
+      d: "Document database holding users and the product catalogue.",
+      links: ["user", "catalogue"] },
+    redis: { x: 190, y: 284, w: 150, h: 50, name: "Redis", sub: "in-memory store", tier: "Data",
+      d: "Fast in-memory key-value store for cart contents. Runs as a StatefulSet with an EBS persistent volume so data survives restarts.",
+      links: ["cart", "user"] },
+    mysql: { x: 360, y: 284, w: 150, h: 50, name: "MySQL", sub: "relational DB", tier: "Data",
+      d: "Relational database holding the ratings and the cities/shipping data.",
+      links: ["ratings", "shipping"] },
+    rabbitmq: { x: 530, y: 284, w: 150, h: 50, name: "RabbitMQ", sub: "message queue", tier: "Data",
+      d: "A queue between payment and dispatch. Orders wait here safely, even if dispatch is slow or restarting.",
+      links: ["payment", "dispatch"] }
+  };
+  var ORDER = [
+    ["web", "You open the shop. The web tier serves the UI and forwards every API call."],
+    ["user", "You log in. The user service checks your credentials in MongoDB."],
+    ["catalogue", "You browse Robots. The catalogue service reads products from MongoDB."],
+    ["ratings", "You open a robot and see its star rating from the ratings service (MySQL)."],
+    ["cart", "You add it to the cart. The cart service saves it in Redis."],
+    ["shipping", "You pick a city. The shipping service calculates distance and cost (MySQL) and updates the cart."],
+    ["payment", "You pay. The payment service creates your order ID and publishes the order."],
+    ["rabbitmq", "The order waits in the RabbitMQ queue. Your browser already shows 'order placed'."],
+    ["dispatch", "The dispatch service picks the order off the queue and processes it in the background. Done!"]
+  ];
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("ms-svg"), out = document.getElementById("ms-out");
+  var nextBtn = document.getElementById("ms-next"), step = -1;
+  var els = {};
+  Object.keys(C).forEach(function (k) {
+    var c = C[k], g = document.createElementNS(NS, "g");
+    g.setAttribute("class", "ms"); g.setAttribute("tabindex", "0"); g.setAttribute("role", "button");
+    g.setAttribute("aria-label", c.name);
+    var r = document.createElementNS(NS, "rect");
+    r.setAttribute("class", "s-box"); r.setAttribute("x", c.x); r.setAttribute("y", c.y);
+    r.setAttribute("width", c.w); r.setAttribute("height", c.h); r.setAttribute("rx", 7);
+    var t1 = document.createElementNS(NS, "text");
+    t1.setAttribute("class", "s-text-b"); t1.setAttribute("x", c.x + c.w / 2); t1.setAttribute("y", c.y + 21);
+    t1.setAttribute("text-anchor", "middle"); t1.textContent = c.name;
+    var t2 = document.createElementNS(NS, "text");
+    t2.setAttribute("class", "s-text-s"); t2.setAttribute("x", c.x + c.w / 2); t2.setAttribute("y", c.y + 39);
+    t2.setAttribute("text-anchor", "middle"); t2.textContent = c.sub;
+    g.appendChild(r); g.appendChild(t1); g.appendChild(t2);
+    g.addEventListener("click", function () { stopTour(); show(k); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); stopTour(); show(k); } });
+    svg.appendChild(g); els[k] = g;
+  });
+  function clear() {
+    svg.classList.remove("focus");
+    Object.keys(els).forEach(function (k) { els[k].classList.remove("sel"); els[k].classList.remove("rel"); });
+  }
+  function highlight(k, rel) {
+    clear(); svg.classList.add("focus"); els[k].classList.add("sel");
+    (rel || []).forEach(function (r) { els[r].classList.add("rel"); });
+  }
+  function show(k) {
+    var c = C[k];
+    highlight(k, c.links);
+    out.className = "output";
+    out.innerHTML = "<strong>" + c.name + "</strong> · " + c.sub + " · " + c.tier + " tier<br>" + c.d +
+      "<br><span class='muted'>Talks to: " + c.links.map(function (l) { return C[l].name; }).join(", ") + "</span>";
+  }
+  function tourStep() {
+    var s = ORDER[step], prev = step > 0 ? [ORDER[step - 1][0]] : [];
+    highlight(s[0], prev);
+    out.className = step === ORDER.length - 1 ? "output ok" : "output";
+    out.innerHTML = "<strong>Step " + (step + 1) + " of " + ORDER.length + ":</strong> " + s[1];
+    nextBtn.disabled = step >= ORDER.length - 1;
+  }
+  function stopTour() { step = -1; nextBtn.disabled = true; }
+  document.getElementById("ms-order").addEventListener("click", function () { step = 0; tourStep(); });
+  nextBtn.addEventListener("click", function () { if (step < ORDER.length - 1) { step++; tourStep(); } });
+  document.getElementById("ms-reset").addEventListener("click", function () {
+    stopTour(); clear(); out.className = "output"; out.textContent = "Tap a component above.";
+  });
+})();
+</script>
+</body>
+</html>

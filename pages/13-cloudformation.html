@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastructure as Code with CloudFormation · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="13">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Infrastructure as Code with CloudFormation</h1>
+    <p class="lead">Instead of clicking resources together, you describe them in a YAML file, and AWS CloudFormation builds them for you, the same way every time. You'll learn what Infrastructure as Code means, how a template is laid out, how stacks work, how to catch manual changes with drift detection, and when to choose Terraform instead.</p>
+  </header>
+
+  <h2>What is Infrastructure as Code?</h2>
+  <p>Developers write code to build apps. <strong>Infrastructure as Code (IaC)</strong> applies the same idea to servers, networks and storage: you <em>write code (a template) that describes infrastructure</em>, and a tool creates it.</p>
+  <p>You might say the <a href="12-aws-cli.html">AWS CLI</a> also uses code. It does, but it doesn't follow the IaC principles. An IaC tool:</p>
+  <ol>
+    <li><strong>Acts as a middleman</strong> between you and one or more cloud providers. You hand it a template, and it turns that into the provider's API calls.</li>
+    <li>Works from templates that are <strong>declarative</strong>: you describe the end result, not the steps.</li>
+    <li>Works from templates that are <strong>versioned</strong>: they live in Git or S3, so you can see what changed 5 or 10 days ago, review changes and audit them.</li>
+  </ol>
+  <div class="grid-2">
+    <div class="card"><h3>Imperative (step by step)</h3><p>"Create a bucket. Now enable versioning. Now add a tag." You give commands in order, like a CLI script. If you run it twice, you may get errors or duplicates.</p></div>
+    <div class="card"><h3>Declarative (end state)</h3><p>"There should be one bucket, with versioning on, tagged <code>app1</code>." The tool works out what to create or change. In short: <strong>what you see is what you get</strong>. Reading the template tells you what exists in AWS.</p></div>
+  </div>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>An architect's blueprint versus shouting instructions at builders. The blueprint can be reviewed, copied and reused for the next house, and anyone can read it to see what the house should look like.</div>
+
+  <h3>Which tools are IaC?</h3>
+  <ul>
+    <li><strong>AWS CloudFormation (CFT)</strong>: AWS only.</li>
+    <li><strong>Azure Resource Manager</strong>: Azure only.</li>
+    <li><strong>Terraform</strong>, <strong>Crossplane</strong>: work with many cloud providers.</li>
+  </ul>
+
+  <h2>How CloudFormation works</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 680 270" role="img" aria-label="You write a YAML template and submit it as a stack. CloudFormation turns it into AWS API calls and creates the stack's resources: an S3 bucket, an EC2 instance and a security group.">
+      <defs><marker id="arr13a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-orange-soft" x="16" y="94" width="150" height="82" rx="8"/>
+      <text class="s-text-b" x="91" y="126" text-anchor="middle">template.yaml</text>
+      <text class="s-text-s" x="91" y="148" text-anchor="middle">YAML or JSON</text>
+      <text class="s-text-s" x="91" y="166" text-anchor="middle">kept in Git / S3</text>
+      <path class="s-line-o" d="M166 135 H222" marker-end="url(#arr13a)"/>
+      <text class="s-text-s" x="194" y="124" text-anchor="middle">create</text>
+      <text class="s-text-s" x="194" y="156" text-anchor="middle">stack</text>
+      <rect class="s-ink" x="226" y="94" width="156" height="82" rx="10"/>
+      <text class="s-text-w" x="304" y="130" text-anchor="middle">CloudFormation</text>
+      <text class="s-text-w" x="304" y="152" text-anchor="middle" style="font-weight:400;font-size:12px">template → API calls</text>
+      <path class="s-line" d="M382 135 H422" marker-end="url(#arr13a)"/>
+      <rect class="s-dash" x="428" y="16" width="236" height="238" rx="12"/>
+      <text class="s-text-s" x="444" y="38">Stack: demo-stack</text>
+      <rect class="s-blue" x="446" y="54" width="200" height="50" rx="8"/>
+      <text class="s-text-b" x="546" y="84" text-anchor="middle">S3 bucket</text>
+      <rect class="s-blue" x="446" y="118" width="200" height="50" rx="8"/>
+      <text class="s-text-b" x="546" y="148" text-anchor="middle">EC2 instance</text>
+      <rect class="s-blue" x="446" y="182" width="200" height="50" rx="8"/>
+      <text class="s-text-b" x="546" y="212" text-anchor="middle">Security group</text>
+    </svg>
+    <figcaption>A <strong>stack</strong> is the set of resources CloudFormation creates from one template. They're created, updated and deleted together.</figcaption>
+  </figure>
+  <ul>
+    <li><strong>Template</strong>: your YAML or JSON file describing resources.</li>
+    <li><strong>Stack</strong>: what you get when you submit a template. CloudFormation builds every resource in it and tracks them as one unit. Delete the stack and its resources are deleted too.</li>
+    <li><strong>Update</strong>: edit the template and update the stack. CloudFormation works out what changed. A <em>change set</em> lets you preview those changes before applying them.</li>
+  </ul>
+
+  <h3>YAML or JSON?</h3>
+  <p>CloudFormation accepts both. <strong>Choose YAML</strong> unless your team already has a lot of JSON:</p>
+  <ul>
+    <li>YAML supports <strong>comments</strong> (<code># this creates the web server</code>), which matters when a team shares templates. JSON has no comments.</li>
+    <li>YAML uses <strong>indentation</strong> (like Python) instead of nested braces, so it's easier to read.</li>
+    <li>YAML is everywhere in DevOps: Kubernetes, Ansible, CI pipelines.</li>
+  </ul>
+  <div class="callout warn"><span class="callout-title">Watch out</span>In YAML, indentation <em>is</em> the structure. Pick 2 spaces and stick to it, and never mix tabs and spaces.</div>
+
+  <h2>Anatomy of a template</h2>
+  <p>A template can have up to ten top-level sections, but <strong>only <code>Resources</code> is required</strong>. Everything else adds reuse, validation and documentation, which matters when many people share templates.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Section</th><th>What it's for</th></tr></thead>
+    <tbody>
+      <tr><td><code>AWSTemplateFormatVersion</code></td><td>Format version. The only valid value is <code>"2010-09-09"</code>, unchanged since 2010.</td></tr>
+      <tr><td><code>Description</code></td><td>Plain-text summary so you (in 20 days) and teammates know what this template does.</td></tr>
+      <tr><td><code>Metadata</code></td><td>Extra info, e.g. owner, team, project.</td></tr>
+      <tr><td><code>Parameters</code></td><td>Inputs supplied when the stack is created, so the same template works for many teams (e.g. instance type, environment).</td></tr>
+      <tr><td><code>Rules</code></td><td>Validate parameter values before anything is created, e.g. "in prod, the instance type must be one of these".</td></tr>
+      <tr><td><code>Mappings</code></td><td>Fixed lookup tables, e.g. region → AMI ID, read with <code>!FindInMap</code>.</td></tr>
+      <tr><td><code>Conditions</code></td><td>True/false checks (usually based on parameters) that decide whether a resource or setting is created.</td></tr>
+      <tr><td><code>Transform</code></td><td>Macros that expand the template, mainly <code>AWS::Serverless</code> (SAM) for serverless apps (<a href="19-lambda.html">Lesson 19</a>).</td></tr>
+      <tr><td><code>Resources</code> <strong>(required)</strong></td><td>The actual AWS resources: buckets, instances, VPCs…</td></tr>
+      <tr><td><code>Outputs</code></td><td>Values to show after creation, e.g. an instance's public IP or a bucket name.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Inside <code>Resources</code>, the first key (e.g. <code>MyBucket</code>) is just a <strong>logical name</strong> you choose. You could call it <code>abhishek1</code>. What defines the resource is its <code>Type</code>, e.g. <code>AWS::S3::Bucket</code> or <code>AWS::EC2::Instance</code>. A template can hold hundreds of resources, each with its own logical name.</div>
+
+  <div class="demo" id="demo-tpl">
+    <div class="demo-head">Try it: template explorer</div>
+    <div class="demo-body">
+      <p>Tap a section name, or any line of the template, to highlight that section and see what it does.</p>
+      <div class="row" id="tpl-btns"></div>
+      <pre id="tpl-code" style="margin-top:10px;font-size:13px"></pre>
+      <div class="output" id="tpl-out">Pick a section.</div>
+    </div>
+  </div>
+
+  <h2>Hands-on: create a stack from a template</h2>
+  <ol class="steps">
+    <li><strong>Write the template.</strong> Start from the docs: search "CloudFormation template reference", open <em>Resource and property reference</em>, find your service (e.g. Amazon S3 → <code>AWS::S3::Bucket</code>) and copy only the properties you need. Every property has YAML and JSON examples.</li>
+    <li><strong>Open CloudFormation</strong> in the console → <strong>Create stack</strong>. You'll see three choices: <em>Template is ready</em> (upload a file or give an S3 URL), <em>Use a sample template</em>, or build one in the visual <em>designer</em> (drag and drop a resource and it generates YAML or JSON; in today's console this is Infrastructure Composer).</li>
+    <li><strong>Upload</strong> your <code>template.yaml</code>, give the stack a name (e.g. <code>s3-bucket</code>), fill in any parameters, optionally choose an IAM role for CloudFormation to use, and click <strong>Submit</strong>.</li>
+    <li>Watch the <strong>Events</strong> tab: <code>CREATE_IN_PROGRESS</code> changes to <code>CREATE_COMPLETE</code>. Check S3 and your bucket is there. You'll also see a <code>cf-templates-…</code> bucket that CloudFormation created automatically to store the templates you upload.</li>
+  </ol>
+<pre><code># template.yaml — the smallest useful template
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Demo bucket with versioning
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: demo-aws-abhi-example.com   # must be globally unique
+      VersioningConfiguration:
+        Status: Enabled</code></pre>
+  <p>You can do the same from the terminal:</p>
+<pre><code>aws cloudformation deploy --template-file template.yaml --stack-name s3-bucket
+aws cloudformation delete-stack --stack-name s3-bucket</code></pre>
+  <div class="callout"><span class="callout-title">Note</span>For one bucket, a stack is overkill; the CLI or console is faster. CloudFormation pays off when you create a VPC, subnets, EC2 instances and S3 buckets together and want to manage them as one unit.</div>
+
+  <h2>Drift detection: catch manual changes</h2>
+  <p>You created a bucket with versioning <em>enabled</em> through CloudFormation. A week later, a teammate goes into the console and <em>suspends</em> versioning. Now reality no longer matches the template. That gap is called <strong>drift</strong>.</p>
+  <p>In the stack, choose <strong>Stack actions → Detect drift</strong>, then <strong>View drift results</strong>. CloudFormation compares every resource with the template and reports:</p>
+  <ul>
+    <li><strong>IN_SYNC</strong>: matches the template.</li>
+    <li><strong>MODIFIED</strong>: a property changed. <em>View drift details</em> shows expected vs actual side by side, e.g. <code>Status: Enabled</code> → <code>Suspended</code>.</li>
+    <li><strong>DELETED</strong>: someone removed the resource completely.</li>
+  </ul>
+  <p>With hundreds of resources, you can't check each one by hand. Drift detection tells you that someone changed something. Then you fix it, and use <a href="11-s3.html">bucket access logs</a> or CloudTrail to find out who, so you can tighten their permissions. Drift detection only runs when you ask for it, so teams often schedule it (e.g. a cron job or scheduled Lambda calling <code>aws cloudformation detect-stack-drift</code>).</p>
+
+  <div class="demo" id="demo-drift">
+    <div class="demo-head">Try it: drift detection</div>
+    <div class="demo-body">
+      <p>The template says <code>VersioningConfiguration.Status: Enabled</code>. Make a manual change, then run drift detection.</p>
+      <div class="grid-2" style="margin:8px 0">
+        <div class="card"><h4>Template (expected)</h4><p style="margin:0"><code>Status: Enabled</code></p></div>
+        <div class="card"><h4>Real bucket (actual)</h4><p style="margin:0" id="dr-actual"></p></div>
+      </div>
+      <div class="row">
+        <button class="btn" id="dr-sus">Suspend versioning in console</button>
+        <button class="btn" id="dr-del">Delete bucket in console</button>
+        <button class="btn" id="dr-fix">Undo manual change</button>
+        <button class="btn primary" id="dr-run">Detect drift</button>
+      </div>
+      <div class="output" id="dr-out">Last drift check: never run.</div>
+    </div>
+  </div>
+
+  <h2>Tips for writing templates faster</h2>
+  <ul>
+    <li><strong>Start small.</strong> Just <code>Resources</code> and one resource. Add parameters and conditions once you're comfortable.</li>
+    <li><strong>Use the documentation.</strong> Nobody memorizes hundreds of properties. The template reference has an example for every resource.</li>
+    <li><strong>VS Code extensions</strong>: <em>YAML</em> (by Red Hat) flags indentation and syntax errors, and <em>AWS Toolkit</em> autocompletes CloudFormation. Type <code>AWS::EC2::</code> and pick <code>Instance</code>, then add <code>ImageId</code>, <code>InstanceType</code>, <code>KeyName</code>, <code>SecurityGroupIds</code>.</li>
+    <li>The visual designer and AI assistants are fine for a first draft, but always read and understand the result.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Practice</span>Write a template that creates one EC2 instance (image ID, instance type, key pair, security group) and deploy it as a stack. Then delete the stack to clean up.</div>
+
+  <h2>CloudFormation vs Terraform</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>CloudFormation</th><th>Terraform</th></tr></thead>
+    <tbody>
+      <tr><td>Clouds</td><td>AWS only</td><td>AWS, Azure, GCP, on-prem and more</td></tr>
+      <tr><td>Language</td><td>YAML / JSON</td><td>HCL</td></tr>
+      <tr><td>Who runs it</td><td>A managed AWS service; state is tracked for you</td><td>A tool you run; you manage the state file</td></tr>
+      <tr><td>Pick it when</td><td>Your company is all-in on AWS</td><td>Multi-cloud or hybrid, or you want one tool everywhere</td></tr>
+    </tbody>
+  </table></div>
+  <p>If you can learn only one, Terraform is more widely asked for, because companies often run workloads on more than one cloud. Terraform is covered in <a href="26-terraform.html">Lesson 26</a>.</p>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Why CloudFormation and not Terraform?" A good answer: <em>"Our organization runs only on AWS and has no plans to move clouds, so a native, AWS-managed IaC service with built-in drift detection was the simplest choice."</em> If multi-cloud comes up, that's the case for Terraform.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Which template section is the only one that's required?</div>
+    <div class="opts"><button>Parameters</button><button>AWSTemplateFormatVersion</button><button>Resources</button></div>
+    <div class="explain">Only <code>Resources</code> is required. The other sections add documentation, inputs, validation and outputs.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">A teammate disabled encryption on a stack's bucket through the console. How do you find out?</div>
+    <div class="opts"><button>Run drift detection on the stack and view drift details</button><button>Re-upload the template; it auto-reverts silently</button><button>CloudFormation blocks console changes, so it can't happen</button></div>
+    <div class="explain">Drift detection compares actual resources with the template and shows expected vs actual values. It doesn't fix or block changes on its own.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">In <code>MyWebServer:</code> / <code>Type: AWS::S3::Bucket</code>, what gets created?</div>
+    <div class="opts"><button>An EC2 web server</button><button>An S3 bucket; the logical name doesn't decide the type</button><button>Nothing; the template is invalid</button></div>
+    <div class="explain">The <code>Type</code> line decides what's created. The logical name is just a label.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><strong>IaC</strong> = describing infrastructure in declarative, versioned templates that a tool turns into API calls.</li>
+      <li>CloudFormation takes YAML/JSON templates (prefer YAML) and creates a <strong>stack</strong>: resources managed as one unit.</li>
+      <li>Only <code>Resources</code> is required. Each resource has a logical name, a <code>Type</code> and <code>Properties</code>. Parameters, Mappings, Conditions and Outputs add reuse.</li>
+      <li><strong>Drift detection</strong> reveals manual changes (MODIFIED / DELETED) by comparing reality with the template.</li>
+      <li>Use the CLI for quick tasks and CloudFormation for full stacks. Choose Terraform when you need more than one cloud.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  /* ---------- Template explorer ---------- */
+  var L = [
+    ["ver", 'AWSTemplateFormatVersion: "2010-09-09"'],
+    ["desc", "Description: Demo stack - one EC2 instance and one S3 bucket"],
+    ["meta", "Metadata:"], ["meta", "  Owner: devops-team"],
+    ["par", "Parameters:"], ["par", "  Env:"], ["par", "    Type: String"], ["par", "    AllowedValues: [dev, prod]"], ["par", "    Default: dev"],
+    ["par", "  InstanceType:"], ["par", "    Type: String"], ["par", "    AllowedValues: [t2.micro, t3.micro]"], ["par", "    Default: t2.micro"],
+    ["map", "Mappings:"], ["map", "  RegionAmi:"], ["map", "    us-east-1:"], ["map", "      Ami: ami-0123456789abcdef0"], ["map", "    ap-south-1:"], ["map", "      Ami: ami-0fedcba9876543210"],
+    ["cond", "Conditions:"], ["cond", "  IsProd: !Equals [!Ref Env, prod]"],
+    ["res", "Resources:"], ["res", "  MyBucket:"], ["res", "    Type: AWS::S3::Bucket"], ["res", "    Properties:"], ["res", "      VersioningConfiguration:"], ["res", "        Status: !If [IsProd, Enabled, Suspended]"],
+    ["res", "  MyInstance:"], ["res", "    Type: AWS::EC2::Instance"], ["res", "    Properties:"], ["res", "      ImageId: !FindInMap [RegionAmi, !Ref \"AWS::Region\", Ami]"], ["res", "      InstanceType: !Ref InstanceType"],
+    ["out", "Outputs:"], ["out", "  BucketName:"], ["out", "    Value: !Ref MyBucket"], ["out", "  InstancePublicIp:"], ["out", "    Value: !GetAtt MyInstance.PublicIp"]
+  ];
+  var S = {
+    ver: ["Version", "Template format version. Always \"2010-09-09\", the only valid value. Optional, but most teams include it."],
+    desc: ["Description", "A human-readable summary. Future you, and your teammates, will thank you."],
+    meta: ["Metadata", "Extra information about the template, such as who owns it or which team or project it belongs to. It doesn't create anything."],
+    par: ["Parameters", "Inputs asked for when you create the stack. Here, any team can choose dev or prod and an instance type, and AllowedValues rejects anything else (like an expensive t2.xlarge). One template, many users."],
+    map: ["Mappings", "A fixed lookup table. AMI IDs differ per region, so the template looks up the right one for the region it's deployed in, using !FindInMap."],
+    cond: ["Conditions", "True/false checks. IsProd is true only when Env = prod. Below, it switches bucket versioning on just for production."],
+    res: ["Resources (required)", "The only required section. MyBucket and MyInstance are logical names you choose; Type decides what's built. !Ref reads a parameter, !If uses a condition, !FindInMap reads the mapping."],
+    out: ["Outputs", "Values shown on the stack's Outputs tab after creation: the generated bucket name and the instance's public IP. Handy for scripts and for other stacks."]
+  };
+  var pre = $("tpl-code"), btns = $("tpl-btns"), spans = [], cur = null;
+  L.forEach(function (l) {
+    var s = document.createElement("span");
+    s.textContent = l[1];
+    s.style.cssText = "display:block;padding:0 6px;cursor:pointer;border-radius:3px;transition:opacity .15s";
+    s.setAttribute("data-sec", l[0]);
+    s.addEventListener("click", function () { select(l[0]); });
+    pre.appendChild(s); spans.push(s);
+  });
+  Object.keys(S).forEach(function (k) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = S[k][0].replace(" (required)", ""); b.setAttribute("aria-pressed", "false"); b.setAttribute("data-sec", k);
+    b.addEventListener("click", function () { select(k); });
+    btns.appendChild(b);
+  });
+  function select(k) {
+    cur = k;
+    spans.forEach(function (s) {
+      var on = s.getAttribute("data-sec") === k;
+      s.style.opacity = on ? "1" : ".45";
+      s.style.color = on ? "var(--orange)" : "";
+      s.style.boxShadow = on ? "inset 3px 0 0 var(--orange)" : "none";
+      s.style.fontWeight = on ? "700" : "400";
+    });
+    Array.prototype.forEach.call(btns.children, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-sec") === k ? "true" : "false"); });
+    $("tpl-out").innerHTML = "<strong></strong> <span></span>";
+    $("tpl-out").firstChild.textContent = S[k][0] + ":";
+    $("tpl-out").lastChild.textContent = S[k][1];
+  }
+  select("res");
+
+  /* ---------- Drift detection ---------- */
+  var actual = "Enabled"; // Enabled | Suspended | deleted
+  function showActual() {
+    var el = $("dr-actual");
+    el.innerHTML = actual === "deleted" ? "<em>bucket not found</em>" : "<code></code>";
+    if (actual !== "deleted") el.firstChild.textContent = "Status: " + actual;
+  }
+  $("dr-sus").onclick = function () { if (actual !== "deleted") actual = "Suspended"; showActual(); };
+  $("dr-del").onclick = function () { actual = "deleted"; showActual(); };
+  $("dr-fix").onclick = function () { actual = "Enabled"; showActual(); };
+  $("dr-run").onclick = function () {
+    var out = $("dr-out");
+    out.className = "output"; out.textContent = "DETECTION_IN_PROGRESS…";
+    setTimeout(function () {
+      var t = new Date().toLocaleTimeString();
+      if (actual === "Enabled") { out.className = "output ok"; out.textContent = "Stack drift status: IN_SYNC · MyBucket: IN_SYNC (checked " + t + ")"; }
+      else if (actual === "Suspended") { out.className = "output bad"; out.textContent = "Stack drift status: DRIFTED · MyBucket: MODIFIED · VersioningConfiguration.Status expected \"Enabled\", actual \"Suspended\" (checked " + t + ")"; }
+      else { out.className = "output bad"; out.textContent = "Stack drift status: DRIFTED · MyBucket: DELETED · the resource no longer exists (checked " + t + ")"; }
+    }, 700);
+  };
+  showActual();
+})();
+</script>
+</body>
+</html>

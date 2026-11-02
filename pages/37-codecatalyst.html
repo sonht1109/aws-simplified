@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon CodeCatalyst · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="37">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Amazon CodeCatalyst</h1>
+    <p class="lead">CodeCatalyst puts source code, CI/CD workflows and developer tools together in one place. In this lesson you'll learn how it's organized (spaces, projects, blueprints, workflows, dev environments) and build a pipeline that uses the AWS CDK to create an S3 bucket from Python code, with no manual clicks after the first setup.</p>
+  </header>
+
+  <h2>First: finding the right AWS services for DevOps</h2>
+  <p>AWS has hundreds of services, so a common problem for teams adopting DevOps is choosing <em>which</em> ones to use. AWS's <b>DevOps on AWS</b> hub (part of the AWS Developer Center) helps with that. It has three sections:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Learn</h3><p>Beginner blogs and videos, plus a <b>"choose a solution"</b> tool. Pick an area and it suggests services. For example, <em>monitoring &amp; logging</em> gives CloudWatch and X-Ray, and <em>platform as a service</em> gives Elastic Beanstalk.</p></div>
+    <div class="card"><h3>Build</h3><p>Problem → solution guides with architecture diagrams and step-by-step instructions, such as "deploy your first web app" or "infrastructure pipelines with CDK and CodeCatalyst". That second guide is the project on this page.</p></div>
+    <div class="card"><h3>Explore</h3><p>Newer topics, such as how AI fits into DevOps (Bedrock, SageMaker, <a href="38-amazon-q-cli.html">Amazon Q Developer</a>).</p></div>
+    <div class="card"><h3>Why it helps</h3><p>It's a good place to bookmark when you need a proof of concept quickly: there's a ready-made guide for many common problems.</p></div>
+  </div>
+
+  <h2>What is CodeCatalyst?</h2>
+  <p><b>Amazon CodeCatalyst</b> is a unified software development service. Instead of wiring together <a href="14-cicd-codecommit.html">CodeCommit</a>, <a href="16-codebuild-ci.html">CodeBuild</a> and <a href="15-codepipeline.html">CodePipeline</a> yourself, you get one web app at <code>codecatalyst.aws</code> with repositories, CI/CD, issues and cloud dev environments. It can also connect to code that already lives on GitHub.</p>
+  <div class="xref-box"><div>Need a refresher on CI/CD? See <a href="14-cicd-codecommit.html">Lesson 14</a>. For what "infrastructure as code" means, see <a href="13-cloudformation.html">Lesson 13: CloudFormation</a>.</div></div>
+
+  <h3>The building blocks</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Term</th><th>What it is</th></tr></thead>
+    <tbody>
+      <tr><td><b>Space</b></td><td>The top-level container for your company or team. You connect an AWS account to the space (for billing and for deploying), and people join the space.</td></tr>
+      <tr><td><b>Project</b></td><td>One piece of work inside a space, such as an app or a pipeline. It holds repos, workflows, issues and environments.</td></tr>
+      <tr><td><b>Blueprint</b></td><td>A project template. It generates starter code, a workflow and settings for common app types. You can also <em>start from scratch</em> or <em>bring your own code</em>.</td></tr>
+      <tr><td><b>Workflow</b></td><td>The CI/CD pipeline: <b>triggers</b> (when to run) + <b>actions</b> (what to run), saved as YAML in the repo.</td></tr>
+      <tr><td><b>Environment</b></td><td>A deployment target: which AWS account and which IAM role a workflow action uses (e.g. "non-production").</td></tr>
+      <tr><td><b>Dev Environment</b></td><td>A cloud-hosted coding workspace you can open in a browser IDE or connect to from your local IDE, already set up with the project's code.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A <b>space</b> is an office building, each <b>project</b> is a room, a <b>blueprint</b> is a furnished-room template, and a <b>workflow</b> is the robot in the room that builds and ships things whenever new code arrives.</div>
+
+  <h2>The AWS CDK in 60 seconds</h2>
+  <p>To create an S3 bucket, you can click buttons in the console. That's fine once, but tiresome if you have to do it many times a week. The <b>AWS Cloud Development Kit (CDK)</b> lets you describe infrastructure in a normal programming language such as Python or TypeScript. Want 10 buckets, or a change to an existing one? Edit the code and run a CDK command.</p>
+  <p>Under the hood, the CDK converts your code into a <a href="13-cloudformation.html">CloudFormation</a> template and deploys it as a <b>stack</b>. Two commands matter:</p>
+  <ul>
+    <li><code>cdk bootstrap</code>: run once per account and region. It creates a helper stack called <b>CDKToolkit</b> with what the CDK needs to work, such as a staging bucket and IAM roles.</li>
+    <li><code>cdk deploy</code>: builds your app into a template and creates or updates your stack.</li>
+  </ul>
+<pre><code># install the CDK CLI (needs Node.js), or: brew install aws-cdk
+npm install -g aws-cdk
+cdk --version
+
+mkdir cdk-s3-bucket &amp;&amp; cd cdk-s3-bucket
+cdk init app --language python   # creates app.py, the stack file, requirements.txt, a venv and a git repo</code></pre>
+  <p><code>cdk init</code> does most of the setup for you. <code>app.py</code> is the entry point that loads your stack class. You only write the resource code inside the stack class:</p>
+<pre><code>from aws_cdk import Stack, aws_s3 as s3
+from constructs import Construct
+
+class CdkS3BucketStack(Stack):
+    def __init__(self, scope: Construct, construct_id: str, **kwargs) -&gt; None:
+        super().__init__(scope, construct_id, **kwargs)
+
+        s3.Bucket(self, "DemoBucket",
+                  bucket_name="demo-cdk-codecatalyst-12345")  # must be globally unique</code></pre>
+  <div class="callout tip"><span class="callout-title">Tip</span>You don't need to remember this code. The CDK <b>API reference</b> has a ready example for each resource and language (search "s3 Bucket", pick Python). A code assistant such as Amazon Q in VS Code can also write it from a prompt like "generate code for S3 bucket creation with bucket name …".</div>
+  <p>Push this project to a GitHub repository. Next, CodeCatalyst will run the CDK commands for you.</p>
+
+  <h2>The pipeline we're building</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 300" role="img" aria-label="Developer pushes CDK code to GitHub; a CodeCatalyst workflow runs CDK bootstrap then CDK deploy using an environment linked to an AWS account; CloudFormation creates the CDKToolkit stack and the S3 bucket stack">
+      <defs><marker id="arr37" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box" x="10" y="40" width="120" height="70" rx="8"/>
+      <text class="s-text-b" x="70" y="70" text-anchor="middle">GitHub repo</text>
+      <text class="s-text-s" x="70" y="92" text-anchor="middle">CDK Python app</text>
+      <text class="s-text-s" x="70" y="30" text-anchor="middle">git push → main</text>
+      <rect class="s-dash" x="160" y="14" width="330" height="134" rx="10"/>
+      <text class="s-text-b" x="325" y="36" text-anchor="middle">CodeCatalyst workflow</text>
+      <rect class="s-purple" x="176" y="54" width="140" height="70" rx="8"/>
+      <text class="s-text-b" x="246" y="84" text-anchor="middle">CDK bootstrap</text>
+      <text class="s-text-s" x="246" y="106" text-anchor="middle">action 1</text>
+      <rect class="s-purple" x="336" y="54" width="140" height="70" rx="8"/>
+      <text class="s-text-b" x="406" y="84" text-anchor="middle">CDK deploy</text>
+      <text class="s-text-s" x="406" y="106" text-anchor="middle">depends on 1</text>
+      <path class="s-line" d="M130 75 H174" marker-end="url(#arr37)"/>
+      <path class="s-line" d="M316 89 H334" marker-end="url(#arr37)"/>
+      <rect class="s-orange-soft" x="520" y="54" width="170" height="70" rx="8"/>
+      <text class="s-text-b" x="605" y="84" text-anchor="middle">Environment</text>
+      <text class="s-text-s" x="605" y="106" text-anchor="middle">AWS account + IAM role</text>
+      <path class="s-line" d="M490 89 H518" marker-end="url(#arr37)"/>
+      <rect class="s-dash" x="160" y="180" width="530" height="110" rx="10"/>
+      <text class="s-text-b" x="425" y="202" text-anchor="middle">Your AWS account (us-east-1) · CloudFormation</text>
+      <rect class="s-blue" x="176" y="216" width="160" height="60" rx="8"/>
+      <text class="s-text-b" x="256" y="242" text-anchor="middle">CDKToolkit</text>
+      <text class="s-text-s" x="256" y="262" text-anchor="middle">helper stack</text>
+      <rect class="s-blue" x="356" y="216" width="160" height="60" rx="8"/>
+      <text class="s-text-b" x="436" y="242" text-anchor="middle">CdkS3BucketStack</text>
+      <text class="s-text-s" x="436" y="262" text-anchor="middle">your stack</text>
+      <rect class="s-green" x="540" y="216" width="136" height="60" rx="8"/>
+      <text class="s-text-b" x="608" y="250" text-anchor="middle">S3 bucket</text>
+      <path class="s-line" d="M516 246 H538" marker-end="url(#arr37)"/>
+      <path class="s-line-o" d="M605 124 V160 H256 V214" marker-end="url(#arr37)"/>
+      <path class="s-line-o" d="M436 160 V214" marker-end="url(#arr37)"/>
+    </svg>
+    <figcaption>A push to <code>main</code> triggers the workflow. Both actions use the environment's IAM role to work in your AWS account through CloudFormation.</figcaption>
+  </figure>
+
+  <h2>Building it, step by step</h2>
+  <ol class="steps">
+    <li><b>Connect CodeCatalyst to AWS.</b> Sign in at <code>codecatalyst.aws</code>, create (or open) a <b>space</b> and connect your AWS account. It then appears under the space's AWS accounts. You can reach this from the console too: search "CodeCatalyst" → Spaces.</li>
+    <li><b>Create a project.</b> Choose <em>Bring your own code</em>, authorize GitHub, and pick the repo (e.g. <code>aws-infra-pipeline</code>). Name the project, e.g. <code>s3-bucket-creation</code>. The other choices are <em>Start from scratch</em> or a <em>Blueprint</em>.</li>
+    <li><b>Create a workflow.</b> Go to <b>CI/CD → Workflows → Create workflow</b> and pick the repo and branch. You can edit it visually, which is easiest for beginners, or as YAML.</li>
+    <li><b>Add a trigger:</b> on <b>push</b> to the <code>main</code> branch.</li>
+    <li><b>Add the "AWS CDK bootstrap" action.</b> Configure the compute (EC2 runner), create an <b>environment</b> (e.g. <code>bucket-creation</code>, non-production) linked to your AWS account and an IAM role (CodeCatalyst can create one), the region (<code>us-east-1</code>), and the CDK CLI version (match your local one).</li>
+    <li><b>Add the "AWS CDK deploy" action.</b> Make it <b>depend on</b> the bootstrap action, use the same environment and region, and set the <b>stack name</b> to the one in <code>app.py</code> (e.g. <code>CdkS3BucketStack</code>). If the name doesn't match, the deploy fails.</li>
+    <li><b>Commit the workflow.</b> It's saved to the repo as YAML, and the first run starts.</li>
+  </ol>
+  <p>Here is roughly what the YAML view shows (simplified. The visual editor fills in exact action versions and account details):</p>
+<pre><code>Name: s3-bucket-workflow
+SchemaVersion: "1.0"
+Triggers:
+  - Type: PUSH
+    Branches:
+      - main
+Actions:
+  CDKBootstrap:
+    Identifier: aws/cdk-bootstrap@v2
+    Inputs:
+      Sources: [WorkflowSource]
+    Compute:
+      Type: EC2
+    Environment:
+      Name: bucket-creation
+      Connections:
+        - Name: "111122223333"            # your AWS account
+          Role: CodeCatalystWorkflowDevelopmentRole
+    Configuration:
+      Region: us-east-1
+      CdkCliVersion: "2.150.0"
+  CDKDeploy:
+    Identifier: aws/cdk-deploy@v2
+    DependsOn: [CDKBootstrap]
+    Inputs:
+      Sources: [WorkflowSource]
+    Compute:
+      Type: EC2
+    Environment:
+      Name: bucket-creation
+      Connections:
+        - Name: "111122223333"
+          Role: CodeCatalystWorkflowDevelopmentRole
+    Configuration:
+      StackName: CdkS3BucketStack
+      Region: us-east-1
+      CdkCliVersion: "2.150.0"</code></pre>
+
+  <div class="demo" id="demo-wf">
+    <div class="demo-head">Try it: step through a workflow run</div>
+    <div class="demo-body">
+      <p>Click <b>Next</b> to follow one run, from <code>git push</code> to a new S3 bucket.</p>
+      <div id="wf-pills" class="row" style="gap:6px"></div>
+      <div class="output" id="wf-out"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn" id="wf-back">← Back</button>
+        <button class="btn primary" id="wf-next">Next →</button>
+        <button class="btn" id="wf-reset">Reset</button>
+      </div>
+    </div>
+  </div>
+
+  <h2>What you see after the run</h2>
+  <ul>
+    <li>The first run takes a couple of minutes because CodeCatalyst first starts a <b>runner</b>, the temporary machine that executes the actions.</li>
+    <li>In <b>CloudFormation</b> you now see two stacks: <b>CDKToolkit</b> (from bootstrap) and your bucket stack (from deploy). The bucket appears in that stack's Resources tab.</li>
+    <li>In <b>S3</b> you see the new bucket. The CDK used CloudFormation to create it.</li>
+    <li>From now on, any change you push to <code>main</code> (another bucket, versioning, tags…) is deployed automatically. Nobody needs to touch the console.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Tip</span>To clean up, delete the bucket stack in CloudFormation (or run <code>cdk destroy</code>). Leftover stacks and buckets are exactly the kind of forgotten resources covered in <a href="36-reduce-aws-bill.html">Lesson 36</a>.</div>
+  <div class="callout warn"><span class="callout-title">Check availability</span>CodeCatalyst stopped accepting new customers on 7 November 2025. Existing users can keep using it, but AWS only plans security, availability and performance fixes, no new features. For a new project, AWS points to CodeBuild, CodePipeline and CodeDeploy instead. The ideas here (IaC in a repo, a pipeline that runs <code>cdk bootstrap</code>/<code>cdk deploy</code>, environments with IAM roles) work the same way in <a href="15-codepipeline.html">CodePipeline</a>, GitHub Actions or Jenkins.</div>
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How would you make infrastructure changes repeatable and reviewable?" Keep IaC (CDK, Terraform or CloudFormation) in Git, run it from a pipeline that has its own IAM role, and trigger it on merge to <code>main</code>. Then nobody needs broad console access.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What does <code>cdk bootstrap</code> do?</div>
+    <div class="opts"><button>Creates your S3 bucket</button><button>Creates the CDKToolkit helper stack the CDK needs in that account/region</button><button>Installs Python dependencies on your laptop</button></div>
+    <div class="explain">Bootstrap prepares the account and region once. <code>cdk deploy</code> then creates your actual resources.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">In CodeCatalyst, what tells a workflow action which AWS account and IAM role to use?</div>
+    <div class="opts"><button>The blueprint</button><button>The trigger</button><button>The environment</button></div>
+    <div class="explain">An environment links an AWS account connection and an IAM role, plus a type such as non-production.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">The CDK deploy action fails with "stack not found". What should you check first?</div>
+    <div class="opts"><button>That the stack name matches the one defined in <code>app.py</code></button><button>That the trigger is set to pull request</button><button>That the bucket name is short</button></div>
+    <div class="explain">The deploy action's stack name has to match the stack your CDK app defines.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>CodeCatalyst brings repos, CI/CD <b>workflows</b>, issues and <b>dev environments</b> together, organized as <b>space → project</b>.</li>
+      <li>Projects can start from a <b>blueprint</b>, from scratch, or from your own GitHub code.</li>
+      <li>A workflow = <b>triggers</b> + <b>actions</b>, stored as YAML. <b>Environments</b> give actions an AWS account and IAM role.</li>
+      <li>The <b>AWS CDK</b> writes infrastructure in Python/TypeScript and deploys it through CloudFormation. Run <code>cdk bootstrap</code> once, then <code>cdk deploy</code>.</li>
+      <li>The <b>DevOps on AWS</b> hub (Learn / Build / Explore) helps you choose services and find ready-made solution guides.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var S = [
+    { n: "Push", t: "You run <code>git push</code> to <b>main</b> on GitHub. The workflow's <b>PUSH trigger</b> on branch <code>main</code> matches, so a new run starts." },
+    { n: "Runner", t: "CodeCatalyst starts a <b>runner</b>: a temporary EC2 machine (<code>Compute: EC2</code>) that clones the repo as <code>WorkflowSource</code>. This is why the first run takes a minute or two." },
+    { n: "Bootstrap", t: "<b>CDKBootstrap</b> runs <code>cdk bootstrap</code> using the <b>bucket-creation</b> environment's IAM role. CloudFormation creates the <b>CDKToolkit</b> stack (staging bucket, roles) in us-east-1. If it already exists, this step is quick." },
+    { n: "Deploy", t: "<b>CDKDeploy</b> waits for bootstrap (<code>DependsOn</code>), installs the Python dependencies from <code>requirements.txt</code>, converts <code>app.py</code> into a CloudFormation template, and deploys stack <b>CdkS3BucketStack</b>." },
+    { n: "Bucket", t: "✅ CloudFormation creates the S3 bucket. Check <b>CloudFormation → Stacks</b> (two stacks) and <b>S3</b> (the new bucket). Push another change and the whole run repeats on its own." }
+  ];
+  var i = 0;
+  var pills = document.getElementById("wf-pills"), out = document.getElementById("wf-out");
+  var nextB = document.getElementById("wf-next"), backB = document.getElementById("wf-back");
+  S.forEach(function (s, k) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.textContent = (k + 1) + ". " + s.n;
+    b.addEventListener("click", function () { i = k; render(); });
+    pills.appendChild(b);
+  });
+  function render() {
+    Array.prototype.forEach.call(pills.children, function (b, k) {
+      b.setAttribute("aria-pressed", k === i ? "true" : "false");
+      b.style.opacity = k > i ? ".55" : "1";
+    });
+    out.innerHTML = "<b>Step " + (i + 1) + " of " + S.length + ":</b> " + S[i].t;
+    out.className = "output" + (i === S.length - 1 ? " ok" : "");
+    backB.disabled = i === 0; nextB.disabled = i === S.length - 1;
+  }
+  nextB.addEventListener("click", function () { if (i < S.length - 1) { i++; render(); } });
+  backB.addEventListener("click", function () { if (i > 0) { i--; render(); } });
+  document.getElementById("wf-reset").addEventListener("click", function () { i = 0; render(); });
+  render();
+})();
+</script>
+</body>
+</html>

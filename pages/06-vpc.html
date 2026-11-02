@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPC: Your Private Network · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+<style>
+  #vpc-map [data-k] { transition: opacity .25s; }
+  #vpc-map.stepping [data-k] { opacity: .22; }
+  #vpc-map.stepping [data-k].on { opacity: 1; }
+  .cidr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 12px; }
+  .cidr-grid div { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .cidr-grid b { display: block; font-size: 18px; color: var(--text); word-break: break-all; }
+</style>
+</head>
+<body data-page="06">
+<main class="wrap">
+  <header class="page-head">
+    <h1>VPC: Your Private Network</h1>
+    <p class="lead">A VPC (Virtual Private Cloud) is your own fenced-off network inside AWS. In this lesson you'll learn why it exists, what its parts are (IP ranges, subnets, internet gateway, route tables, NAT gateway), and how a request from the internet finds its way to your server.</p>
+  </header>
+
+  <h2>Why do we need a VPC?</h2>
+  <p>Picture a big piece of land in a village. A clever builder buys it and offers a deal to people who don't want to build or maintain their own homes: "Tell me what you need, pay me, and I'll build and look after the house for you."</p>
+  <p>Business is good — but to save money the builder puts all the houses right next to each other with no walls between them. If a burglar gets into one house, it's easy to walk into the next one. The careful customers complain, so the builder invents something better: a <strong>gated community</strong>.</p>
+  <ul>
+    <li>Each group of houses gets its own <strong>fenced property</strong>.</li>
+    <li>There is a single <strong>gate</strong> where visitors come in.</li>
+    <li>Inside, <strong>signposts</strong> tell visitors which path leads to which house.</li>
+    <li>At each house a <strong>guard</strong> checks: "Are you really allowed to see this person?"</li>
+  </ul>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>AWS is the builder. Its data centers are the land. In the early days, servers from many different companies could sit side by side with weak separation, so one hacked customer was a risk to others. The <strong>VPC</strong> is the gated community: a logically isolated network that belongs only to you. The gate is the <em>internet gateway</em>, the signposts are <em>route tables</em>, and the guards are <em>security groups</em>.</div>
+
+  <p>Unlike the builder story, AWS doesn't design your community for you. AWS gives you the building blocks and documentation; <strong>DevOps engineers</strong> are the ones who create and configure the VPC for their project.</p>
+
+  <div class="callout"><span class="callout-title">Note</span>Every AWS account comes with a <strong>default VPC</strong> in each region so you can launch an EC2 instance straight away (that's what happened in <a href="04-ec2.html">Lesson 4</a>). Real companies almost always build their own <strong>custom VPCs</strong> so they control every setting.</div>
+
+  <h2>Sizing a VPC: IP ranges and CIDR</h2>
+  <p>Land is measured in acres. A VPC is measured in <strong>IP addresses</strong> — every server, load balancer and database inside it needs one. When you create a VPC, AWS asks for an <strong>IP address range</strong>, written in <strong>CIDR notation</strong> (Classless Inter-Domain Routing), for example <code>10.0.0.0/16</code>.</p>
+  <ul>
+    <li>An IPv4 address has 32 bits, written as four numbers (<code>10.0.0.0</code>).</li>
+    <li>The number after the slash says how many of those bits are <strong>fixed</strong>. The rest can change, and each combination is one address.</li>
+    <li>So <code>/16</code> leaves 16 free bits → 2<sup>16</sup> = <strong>65,536</strong> addresses. <code>/24</code> leaves 8 free bits → 2<sup>8</sup> = <strong>256</strong> addresses.</li>
+    <li>Smaller number after the slash = <strong>bigger</strong> network.</li>
+  </ul>
+  <p>AWS lets a VPC (and a subnet) be anywhere from <code>/16</code> (largest) to <code>/28</code> (16 addresses, smallest). Inside every subnet AWS keeps <strong>5 addresses</strong> for itself (the network address, the VPC router, DNS, one reserved for future use, and the broadcast address), so a <code>/24</code> subnet gives you 251 usable IPs.</p>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Pick a size with room to grow. You <em>can</em> add extra ranges to a VPC later, but it's extra work. Private ranges such as <code>10.x.x.x</code>, <code>172.16–31.x.x</code> and <code>192.168.x.x</code> are the usual choices.</div>
+
+  <div class="demo" id="demo-cidr">
+    <div class="demo-head">Try it: CIDR calculator</div>
+    <div class="demo-body">
+      <p>Type a range like <code>10.0.0.0/16</code> or <code>172.16.3.0/24</code>, or tap a preset.</p>
+      <div class="row">
+        <input type="text" id="cidr-in" value="10.0.0.0/16" aria-label="CIDR block" style="flex:1 1 180px">
+        <button class="btn primary" id="cidr-go">Calculate</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" data-cidr="10.0.0.0/16">/16 VPC</button>
+        <button class="btn" data-cidr="10.0.1.0/24">/24 subnet</button>
+        <button class="btn" data-cidr="10.0.1.0/20">/20</button>
+        <button class="btn" data-cidr="10.0.1.0/28">/28 smallest</button>
+      </div>
+      <div class="cidr-grid" id="cidr-grid"></div>
+      <div class="output" id="cidr-out">Results appear here.</div>
+    </div>
+  </div>
+
+  <h2>Subnets: splitting the VPC</h2>
+  <p>One project usually has several smaller parts — say payments, transactions and reporting. Instead of throwing everything into one big pool, you split the VPC's range into smaller ranges called <strong>subnets</strong> (short for <em>sub-networks</em>). For example, inside <code>172.16.0.0/16</code>:</p>
+  <div class="table-wrap"><table>
+    <tr><th>Subnet</th><th>Range</th><th>Addresses</th></tr>
+    <tr><td>Payments</td><td><code>172.16.1.0/24</code></td><td>256</td></tr>
+    <tr><td>Transactions</td><td><code>172.16.2.0/24</code></td><td>256</td></tr>
+    <tr><td>Reporting</td><td><code>172.16.3.0/24</code></td><td>256</td></tr>
+  </table></div>
+  <p>Each subnet lives in a single <a href="02-intro-to-aws.html">Availability Zone</a>, and you launch EC2 instances into a subnet. Subnets come in two flavours:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Public subnet</h3><p>Reachable from the internet. Its route table sends internet traffic to the <strong>internet gateway</strong>. This is where you put things the outside world should talk to first: <strong>load balancers</strong> and <strong>NAT gateways</strong>.</p></div>
+    <div class="card"><h3>Private subnet</h3><p>No direct route from the internet. Your <strong>application servers</strong> and databases live here, so nobody outside can reach them directly. Best practice: apps go in private subnets.</p></div>
+  </div>
+
+  <h2>The main building blocks</h2>
+  <h3>Internet gateway (IGW)</h3>
+  <p>The <strong>gate</strong> of the gated community. An internet gateway is attached to the VPC and is the only way traffic can move between your VPC and the public internet. No IGW = nobody from outside can get in, and nothing inside can reach out directly.</p>
+
+  <h3>Route tables</h3>
+  <p>The <strong>signposts</strong>. A route table is a list of rules that says "traffic going to <em>this</em> destination, send it <em>there</em>". At home your Wi-Fi router does the same job, and on the internet your request hops through many routers. In AWS each subnet is associated with a route table.</p>
+  <ul>
+    <li>Every route table has a <code>local</code> route for the VPC's own range, so subnets in the same VPC can talk to each other.</li>
+    <li>A <strong>public</strong> subnet's table adds <code>0.0.0.0/0 → igw-…</code> ("anything else, send to the internet gateway").</li>
+    <li>A <strong>private</strong> subnet's table has no route to the IGW (it may have <code>0.0.0.0/0 → nat-…</code>, see below).</li>
+  </ul>
+  <div class="callout"><span class="callout-title">Note</span>A subnet isn't "public" because of a checkbox. It's public <em>because its route table points to an internet gateway</em>. Remove that route and it becomes private.</div>
+
+  <h3>Load balancer</h3>
+  <p>Users don't hit your servers directly. A <strong>load balancer</strong> sits in the public subnet, receives every request and passes it to a healthy server in the private subnet. You tell it which servers to use with a <strong>target group</strong>. Load balancers get a full lesson later in <a href="28-load-balancers.html">Lesson 28</a>.</p>
+
+  <h3>Security groups (and NACLs)</h3>
+  <p>The <strong>guard at the door</strong>. Even after a request reaches the right subnet, the server's security group can still refuse it — for example "only allow port 8080". There is also a second guard at the subnet level called a NACL.</p>
+  <div class="xref-box"><div>Security groups, NACLs, and how they differ are covered in <a href="07-security-groups-nacl.html">Lesson 7: Security Groups vs NACLs</a>.</div></div>
+
+  <h2>How a request travels into a VPC</h2>
+  <p>Let's follow a user who opens your app in a browser. Press <strong>Next step</strong> to light up each hop on the map.</p>
+
+  <figure class="diagram">
+    <svg id="vpc-map" viewBox="0 0 700 380" role="img" aria-label="A user on the internet reaches an internet gateway, then a load balancer in a public subnet, then an EC2 instance protected by a security group in a private subnet. A NAT gateway in the public subnet handles outbound traffic.">
+      <defs><marker id="arr6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <g data-k="user">
+        <rect class="s-box2" x="8" y="160" width="92" height="56" rx="8"/>
+        <text class="s-text-b" x="54" y="185" text-anchor="middle">User</text>
+        <text class="s-text-s" x="54" y="203" text-anchor="middle">internet</text>
+      </g>
+      <g data-k="igw">
+        <rect class="s-orange" x="122" y="160" width="76" height="56" rx="8"/>
+        <text class="s-text-ink" x="160" y="193" text-anchor="middle">IGW</text>
+      </g>
+      <rect class="s-dash" x="214" y="14" width="478" height="352" rx="12"/>
+      <text class="s-text-b" x="230" y="36">VPC 10.0.0.0/16</text>
+      <g data-k="pub">
+        <rect class="s-green" x="230" y="50" width="196" height="300" rx="10"/>
+        <text class="s-text-b" x="244" y="72">Public subnet</text>
+        <text class="s-text-s" x="244" y="88">10.0.1.0/24</text>
+        <text class="s-text-s" x="244" y="336">RT: 0.0.0.0/0 → IGW</text>
+      </g>
+      <g data-k="alb">
+        <rect class="s-blue" x="248" y="150" width="160" height="56" rx="8"/>
+        <text class="s-text-b" x="328" y="175" text-anchor="middle">Load balancer</text>
+        <text class="s-text-s" x="328" y="193" text-anchor="middle">target group</text>
+      </g>
+      <g data-k="nat">
+        <rect class="s-purple" x="248" y="250" width="160" height="56" rx="8"/>
+        <text class="s-text-b" x="328" y="275" text-anchor="middle">NAT gateway</text>
+        <text class="s-text-s" x="328" y="293" text-anchor="middle">public IP</text>
+      </g>
+      <g data-k="priv">
+        <rect class="s-box2" x="446" y="50" width="230" height="300" rx="10"/>
+        <text class="s-text-b" x="460" y="72">Private subnet</text>
+        <text class="s-text-s" x="460" y="88">10.0.2.0/24</text>
+        <text class="s-text-s" x="460" y="336">RT: 0.0.0.0/0 → NAT</text>
+      </g>
+      <g data-k="sg">
+        <rect class="s-dash" x="466" y="130" width="190" height="96" rx="10" style="stroke:var(--red)"/>
+        <text class="s-text-s" x="476" y="146">security group</text>
+      </g>
+      <g data-k="ec2">
+        <rect class="s-orange-soft" x="486" y="154" width="150" height="56" rx="8"/>
+        <text class="s-text-b" x="561" y="179" text-anchor="middle">EC2 · app</text>
+        <text class="s-text-s" x="561" y="197" text-anchor="middle">10.0.2.15</text>
+      </g>
+      <g data-k="in">
+        <path class="s-line-o" d="M100 188 H120" marker-end="url(#arr6)"/>
+        <path class="s-line-o" d="M198 188 H246" marker-end="url(#arr6)"/>
+        <path class="s-line-o" d="M408 178 H484" marker-end="url(#arr6)"/>
+      </g>
+      <g data-k="out">
+        <path class="s-line" d="M561 212 V278 H410" marker-end="url(#arr6)" stroke-dasharray="5 4"/>
+        <path class="s-line" d="M248 278 H160 V218" marker-end="url(#arr6)" stroke-dasharray="5 4"/>
+      </g>
+    </svg>
+    <figcaption>Orange arrows: a user's request coming in. Dashed arrows: the app reaching out to the internet through the NAT gateway.</figcaption>
+  </figure>
+
+  <div class="demo" id="demo-journey">
+    <div class="demo-head">Try it: a packet's journey</div>
+    <div class="demo-body">
+      <div class="row">
+        <button class="btn active" id="j-in" aria-pressed="true">User → app</button>
+        <button class="btn" id="j-out" aria-pressed="false">App → internet</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn" id="j-prev">◀ Back</button>
+        <button class="btn primary" id="j-next">Next step ▶</button>
+        <button class="btn" id="j-reset">Show all</button>
+      </div>
+      <div class="output" id="j-out-text">Press <b>Next step</b> to start. The map above will highlight each hop.</div>
+    </div>
+  </div>
+
+  <p>In short, an incoming request goes:</p>
+  <ol class="steps">
+    <li><strong>Internet gateway</strong> — the request enters the VPC.</li>
+    <li><strong>Public subnet</strong> — its route table connects it to the IGW, so the request reaches the <strong>load balancer</strong>.</li>
+    <li><strong>Route table</strong> — the <code>local</code> route lets the load balancer reach the private subnet.</li>
+    <li><strong>Security group</strong> — checks the port and source IP. If allowed…</li>
+    <li><strong>EC2 instance</strong> — the application finally gets the request.</li>
+  </ol>
+
+  <h2>NAT gateway: going out without being seen</h2>
+  <p>So far traffic came <em>in</em>. But servers in a private subnet often need to go <em>out</em> — to download a package, apply security updates or call another company's API. They have no route to the IGW, so how?</p>
+  <p>Also, it's bad practice to reveal your private servers' IP addresses to the outside world. If the website you call is ever compromised, an attacker would learn where your servers are.</p>
+  <p>The answer is a <strong>NAT gateway</strong> (Network Address Translation):</p>
+  <ul>
+    <li>It lives in the <strong>public subnet</strong> and has its own public IP (an Elastic IP).</li>
+    <li>The private subnet's route table says <code>0.0.0.0/0 → nat-…</code>.</li>
+    <li>When a private server sends a request, the NAT gateway <strong>swaps the private source IP for its own public IP</strong> (this is "IP masking"), sends it out through the IGW and passes the reply back.</li>
+    <li>It only allows connections that start <em>inside</em>. Nobody on the internet can start a connection to your private server through it.</li>
+  </ul>
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A company mailroom. Employees hand letters to the mailroom, which sends them out with the <em>company's</em> return address. Replies come back to the mailroom and get delivered inside. Outsiders never learn which desk the letter came from.</div>
+
+  <h2>VPC flow logs</h2>
+  <p>When something doesn't work ("why can't users reach my app?"), you want to see the traffic. <strong>VPC flow logs</strong> record information about the IP traffic going to and from network interfaces in your VPC: who talked to whom, on which port, and whether it was accepted or rejected. They are great for debugging and security audits. Note that flow logs (and NAT gateways) cost money, while the VPC itself, subnets, route tables and the internet gateway are free.</p>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Explain how a request reaches an app in a private subnet" is a classic. Walk through it in order: <em>internet gateway → public subnet with load balancer → route table → (NACL) → security group → EC2</em>, then add how outbound traffic uses a NAT gateway. You'll build this exact setup in <a href="09-vpc-production-project.html">Lesson 9</a>.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your VPC is <code>10.0.0.0/16</code>. How many IP addresses does it contain?</div>
+    <div class="opts"><button>256</button><button>16</button><button>65,536</button><button>4,096</button></div>
+    <div class="explain">/16 leaves 32 − 16 = 16 free bits, and 2<sup>16</sup> = 65,536.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">What makes a subnet "public"?</div>
+    <div class="opts"><button>It has more IP addresses than a private subnet</button><button>Its route table sends 0.0.0.0/0 to an internet gateway</button><button>It contains a NAT gateway</button></div>
+    <div class="explain">Public vs private is decided by routing. A route to the internet gateway makes a subnet public.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">A server in a private subnet must download security patches, but must not be reachable from the internet. What do you add?</div>
+    <div class="opts"><button>A NAT gateway in a public subnet, and a route to it from the private subnet</button><button>A second internet gateway attached to the private subnet</button><button>A bigger CIDR range</button></div>
+    <div class="explain">A NAT gateway lets private servers start outbound connections while hiding their private IPs, and blocks connections started from outside.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>A <strong>VPC</strong> is your own isolated network in AWS — the "gated community" for your servers.</li>
+      <li>Its size is a <strong>CIDR range</strong>: <code>/16</code> = 65,536 IPs, <code>/24</code> = 256. AWS reserves 5 IPs per subnet.</li>
+      <li><strong>Subnets</strong> split the range. Public subnets hold load balancers and NAT gateways; private subnets hold your apps.</li>
+      <li>The <strong>internet gateway</strong> is the door; <strong>route tables</strong> are the signposts; <strong>security groups</strong> are the guards.</li>
+      <li>A <strong>NAT gateway</strong> lets private servers reach the internet while hiding their IPs.</li>
+      <li><strong>VPC flow logs</strong> record traffic so you can debug and audit.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  /* ---- CIDR calculator ---- */
+  var input = document.getElementById("cidr-in");
+  var grid = document.getElementById("cidr-grid");
+  var out = document.getElementById("cidr-out");
+  function ipToInt(p) { return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3]; }
+  function intToIp(n) { return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join("."); }
+  function fmt(n) { return n.toLocaleString("en-US"); }
+  function calc() {
+    var v = input.value.trim();
+    var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})$/.exec(v);
+    grid.innerHTML = "";
+    if (!m) { out.className = "output bad"; out.textContent = "Please use the form a.b.c.d/n, for example 10.0.0.0/16."; return; }
+    var parts = [+m[1], +m[2], +m[3], +m[4]], pre = +m[5];
+    if (parts.some(function (x) { return x > 255; }) || pre > 32) { out.className = "output bad"; out.textContent = "Each number must be 0–255 and the prefix 0–32."; return; }
+    var total = Math.pow(2, 32 - pre);
+    var mask = pre === 0 ? 0 : (0xFFFFFFFF << (32 - pre)) >>> 0;
+    var net = (ipToInt(parts) & mask) >>> 0;
+    var last = (net + total - 1) >>> 0;
+    var cells = [
+      ["Total IPs", fmt(total)],
+      ["Usable in AWS subnet", total >= 16 ? fmt(total - 5) : "—"],
+      ["First address", intToIp(net)],
+      ["Last address", intToIp(last)]
+    ];
+    cells.forEach(function (c) { var d = document.createElement("div"); d.innerHTML = c[0] + "<b>" + c[1] + "</b>"; grid.appendChild(d); });
+    var msg = "/" + pre + " fixes " + pre + " bits and leaves " + (32 - pre) + " free bits → 2^" + (32 - pre) + " = " + fmt(total) + " addresses.";
+    if (intToIp(net) !== parts.join(".")) msg += " (Note: the range really starts at " + intToIp(net) + "/" + pre + ".)";
+    if (pre < 16 || pre > 28) { out.className = "output bad"; msg += " AWS only allows VPC and subnet sizes from /16 to /28."; }
+    else { out.className = "output ok"; msg += " Valid size for an AWS VPC or subnet."; }
+    out.textContent = msg;
+  }
+  document.getElementById("cidr-go").addEventListener("click", calc);
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") calc(); });
+  Array.prototype.forEach.call(document.querySelectorAll("[data-cidr]"), function (b) {
+    b.addEventListener("click", function () { input.value = b.getAttribute("data-cidr"); calc(); });
+  });
+  calc();
+
+  /* ---- Packet journey ---- */
+  var svg = document.getElementById("vpc-map");
+  var text = document.getElementById("j-out-text");
+  var flows = {
+    in: [
+      { on: ["user"], t: "1. A user on the internet opens your app. In real life they type a domain name that points to the load balancer." },
+      { on: ["user", "igw", "in"], t: "2. The request reaches the <b>internet gateway</b> — the only door between the internet and the VPC." },
+      { on: ["igw", "pub", "alb", "in"], t: "3. The <b>public subnet's route table</b> has <code>0.0.0.0/0 → IGW</code>, so the public subnet is reachable. The <b>load balancer</b> lives here and receives the request." },
+      { on: ["alb", "priv", "in"], t: "4. The load balancer picks a server from its <b>target group</b>. The <code>local</code> route in the route table lets traffic flow from the public subnet into the private subnet." },
+      { on: ["sg", "priv"], t: "5. The <b>security group</b> (the guard) checks the port and source. Wrong port or not allowed? Request dropped. (A subnet-level NACL can also check — see Lesson 7.)" },
+      { on: ["sg", "ec2"], t: "6. Allowed! The <b>EC2 instance</b> in the private subnet gets the request and the app responds back along the same path." }
+    ],
+    out: [
+      { on: ["ec2", "sg"], t: "1. The app in the private subnet wants to download a package from the internet." },
+      { on: ["ec2", "priv", "out"], t: "2. The <b>private subnet's route table</b> has <code>0.0.0.0/0 → NAT</code>, so the request goes to the NAT gateway (not the IGW)." },
+      { on: ["nat", "pub", "out"], t: "3. The <b>NAT gateway</b> replaces the private source IP (10.0.2.15) with its own public IP. The outside world never sees the server's address." },
+      { on: ["nat", "igw", "out"], t: "4. The NAT gateway sends the request out through the <b>internet gateway</b>." },
+      { on: ["igw", "user", "nat", "ec2", "out"], t: "5. The reply comes back to the NAT gateway, which hands it to the server. Connections started from the internet can't come in this way." }
+    ]
+  };
+  var mode = "in", idx = -1;
+  var groups = svg.querySelectorAll("[data-k]");
+  function render() {
+    if (idx < 0) { svg.classList.remove("stepping"); text.innerHTML = "Press <b>Next step</b> to start. The map above will highlight each hop."; return; }
+    var s = flows[mode][idx];
+    svg.classList.add("stepping");
+    Array.prototype.forEach.call(groups, function (g) {
+      g.classList.toggle("on", s.on.indexOf(g.getAttribute("data-k")) >= 0);
+    });
+    text.innerHTML = s.t + ' <span class="muted">(' + (idx + 1) + "/" + flows[mode].length + ")</span>";
+  }
+  function setMode(m) {
+    mode = m; idx = -1;
+    var a = document.getElementById("j-in"), b = document.getElementById("j-out");
+    a.classList.toggle("active", m === "in"); a.setAttribute("aria-pressed", m === "in");
+    b.classList.toggle("active", m === "out"); b.setAttribute("aria-pressed", m === "out");
+    render();
+  }
+  document.getElementById("j-in").addEventListener("click", function () { setMode("in"); });
+  document.getElementById("j-out").addEventListener("click", function () { setMode("out"); });
+  document.getElementById("j-next").addEventListener("click", function () { if (idx < flows[mode].length - 1) idx++; render(); });
+  document.getElementById("j-prev").addEventListener("click", function () { if (idx > -1) idx--; render(); });
+  document.getElementById("j-reset").addEventListener("click", function () { idx = -1; render(); });
+})();
+</script>
+</body>
+</html>

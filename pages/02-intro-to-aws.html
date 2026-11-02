@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Introduction to AWS &amp; the Cloud · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="02">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Introduction to AWS &amp; the Cloud</h1>
+    <p class="lead">What "the cloud" really is, how public and private clouds differ, why so many companies use AWS, how AWS spreads its data centers around the world, and how to open your own account.</p>
+  </header>
+
+  <h2>Before the cloud: data centers</h2>
+  <p>Ten to twenty years ago, if a company wanted to run an application, it bought physical <strong>servers</strong> (powerful computers built to run software 24/7) from vendors like IBM or HP. Those servers lived in a <strong>data center</strong>: a room or building full of servers, with:</p>
+  <ul>
+    <li>lots of network cables and the company's own network setup,</li>
+    <li>cooling to keep the right temperature,</li>
+    <li>backup power so nothing switches off,</li>
+    <li>a team of people to patch, upgrade and guard everything around the clock.</li>
+  </ul>
+  <p>There was also a big waste problem. One server might have 100 CPUs and 100 GB of RAM. If you ran a single small application that needed only 1 CPU and 1 GB, the other 99% sat idle. Need another app? Buy another server.</p>
+
+  <h2>Virtualization: one server, many machines</h2>
+  <p><strong>Virtualization</strong> fixes that waste. A piece of software called a <strong>hypervisor</strong> runs on the physical server and splits it into several <strong>virtual machines (VMs)</strong>. Each VM behaves like its own separate computer with its own operating system, CPU share, memory and disk.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 270" role="img" aria-label="Without virtualization one app wastes a big server; with virtualization a hypervisor splits the server into several virtual machines">
+      <text class="s-text-b" x="160" y="22" text-anchor="middle">Without virtualization</text>
+      <rect class="s-box2" x="30" y="36" width="260" height="190" rx="10"/>
+      <text class="s-text-s" x="160" y="56" text-anchor="middle">Physical server · 100 CPU · 100 GB</text>
+      <rect class="s-blue" x="50" y="70" width="70" height="40" rx="6"/>
+      <text class="s-text-b" x="85" y="95" text-anchor="middle">App</text>
+      <rect class="s-dash" x="130" y="70" width="140" height="140" rx="6"/>
+      <text class="s-text-s" x="200" y="136" text-anchor="middle">99% unused</text>
+      <text class="s-text-s" x="200" y="154" text-anchor="middle">(wasted money)</text>
+      <text class="s-text-b" x="510" y="22" text-anchor="middle">With virtualization</text>
+      <rect class="s-box2" x="380" y="36" width="260" height="190" rx="10"/>
+      <text class="s-text-s" x="510" y="56" text-anchor="middle">Same physical server</text>
+      <rect class="s-green" x="396" y="70" width="70" height="80" rx="6"/>
+      <text class="s-text-b" x="431" y="104" text-anchor="middle">VM 1</text>
+      <text class="s-text-s" x="431" y="122" text-anchor="middle">App A</text>
+      <rect class="s-green" x="475" y="70" width="70" height="80" rx="6"/>
+      <text class="s-text-b" x="510" y="104" text-anchor="middle">VM 2</text>
+      <text class="s-text-s" x="510" y="122" text-anchor="middle">App B</text>
+      <rect class="s-green" x="554" y="70" width="70" height="80" rx="6"/>
+      <text class="s-text-b" x="589" y="104" text-anchor="middle">VM 3</text>
+      <text class="s-text-s" x="589" y="122" text-anchor="middle">App C</text>
+      <rect class="s-orange" x="396" y="164" width="228" height="44" rx="6"/>
+      <text class="s-text-ink" x="510" y="191" text-anchor="middle">Hypervisor</text>
+      <text class="s-text-s" x="340" y="258" text-anchor="middle">Virtualization lets many applications share one big machine safely.</text>
+    </svg>
+    <figcaption>Virtualization turns one large, mostly idle server into several fully used virtual machines.</figcaption>
+  </figure>
+
+  <h2>So what is "the cloud"?</h2>
+  <p>Once servers are virtualized, VMs can be created on request and handed out over the network. A developer asks for five servers, an admin creates five VMs and sends back their IP addresses. The developer uses them without knowing (or caring) which building or rack they physically live in.</p>
+  <p>That is the core idea of <strong>cloud computing</strong>: computing resources (servers, storage, databases and more) delivered <em>on demand over a network</em>, while the physical hardware stays somewhere out of sight, "in the cloud".</p>
+
+  <h3>Private, public and hybrid cloud</h3>
+  <div class="grid-2">
+    <div class="card"><h3>Private cloud</h3><p>A company builds this cloud setup <strong>inside its own data center</strong>, only for its own staff. Its own team buys, runs and secures everything, often with platforms like OpenStack or VMware. Banks and others with very sensitive data still do this.</p></div>
+    <div class="card"><h3>Public cloud</h3><p>A provider such as <strong>AWS, Microsoft Azure or Google Cloud</strong> owns huge data centers worldwide and rents resources to <em>anyone</em> with an account. You pay only for what you use ("pay as you go").</p></div>
+    <div class="card"><h3>Hybrid cloud</h3><p>A mix: some systems stay in the company's own data center (for example, a sensitive database), while others run on a public cloud. Common during a slow move to the cloud.</p></div>
+  </div>
+  <p><strong>On-premises</strong> (or "on-prem") simply means "in our own building, on our own hardware", which is where private clouds live.</p>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>Owning a car vs. using a taxi app. Owning (private cloud) gives full control, but you pay for fuel, insurance, repairs and parking even when it sits unused. The taxi (public cloud) is there when you need it, someone else does the maintenance, and you pay per ride.</div>
+
+  <div class="callout"><span class="callout-title">"Isn't public cloud less secure?"</span>A common worry is that your servers share hardware with other companies. AWS keeps customers isolated from each other, and you can build your own private, walled-off network inside AWS. That is a <a href="06-vpc.html">VPC</a>, covered in Lesson 6.</div>
+
+  <h2>Why public cloud is so popular</h2>
+  <p>Most people assume the main reason is cost. Cost matters, but the <strong>first</strong> reason is usually maintenance.</p>
+  <ol class="steps">
+    <li><strong>No maintenance overhead.</strong> A 50-person startup would need several people just to run a data center: patching servers, fixing hardware, watching for power loss and attacks, 24/7. On a public cloud you create an account, give your team access, and start building.</li>
+    <li><strong>Cost and pay-as-you-go.</strong> No large upfront purchase. Turn servers off at night or during holidays and you stop paying for them. Providers buy hardware at enormous scale, so it's cheaper per unit.</li>
+    <li><strong>Speed and choice.</strong> Get a server in minutes instead of waiting weeks for hardware delivery. AWS started with a handful of offerings (virtual servers, storage) and now has more than 200 <strong>services</strong> (ready-made products such as databases or managed Kubernetes).</li>
+  </ol>
+
+  <h3>Is everyone leaving the cloud?</h3>
+  <p>You may hear about <strong>cloud repatriation</strong>: companies moving from public cloud back to their own data centers, usually because of security rules or because they didn't get the savings they expected. It is real but small, a tiny percentage of companies. Startups and mid-size companies especially can't afford to build and staff their own data centers, so cloud adoption keeps growing.</p>
+
+  <h2>Why AWS?</h2>
+  <ul>
+    <li><strong>First mover.</strong> AWS pioneered public cloud. Many companies started their cloud journey on AWS over a decade ago and stayed.</li>
+    <li><strong>Largest market share,</strong> followed by Azure and then Google Cloud. More companies on AWS means more AWS job openings.</li>
+    <li><strong>Skills transfer.</strong> The concepts are the same across clouds; names, screens and some details differ. Learning AWS first is a safe bet.</li>
+  </ul>
+
+  <h2>Regions and Availability Zones</h2>
+  <p>AWS's data centers are spread across the world, and you choose where your resources live.</p>
+  <ul>
+    <li>A <strong>Region</strong> is a geographic area with AWS data centers, such as <em>Mumbai</em> (<code>ap-south-1</code>), <em>Frankfurt</em> (<code>eu-central-1</code>) or <em>N. Virginia</em> (<code>us-east-1</code>). Regions are independent of each other.</li>
+    <li>An <strong>Availability Zone (AZ)</strong> is one or more separate data centers <em>inside</em> a region, with its own power and networking. A region has several AZs, named with a letter: <code>us-east-1a</code>, <code>us-east-1b</code>, …</li>
+  </ul>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 250" role="img" aria-label="A region contains three availability zones; an app running in two AZs survives when one AZ fails">
+      <rect class="s-dash" x="20" y="20" width="640" height="210" rx="14"/>
+      <text class="s-text-b" x="40" y="46">Region: us-east-1 (N. Virginia)</text>
+      <rect class="s-blue" x="40" y="64" width="190" height="146" rx="10"/>
+      <text class="s-text-b" x="135" y="88" text-anchor="middle">AZ us-east-1a</text>
+      <rect class="s-box" x="70" y="104" width="130" height="40" rx="6"/>
+      <text class="s-text" x="135" y="129" text-anchor="middle">App copy 1</text>
+      <text class="s-text-s" x="135" y="176" text-anchor="middle">own power + network</text>
+      <rect class="s-blue" x="245" y="64" width="190" height="146" rx="10"/>
+      <text class="s-text-b" x="340" y="88" text-anchor="middle">AZ us-east-1b</text>
+      <rect class="s-box" x="275" y="104" width="130" height="40" rx="6"/>
+      <text class="s-text" x="340" y="129" text-anchor="middle">App copy 2</text>
+      <text class="s-text-s" x="340" y="176" text-anchor="middle">own power + network</text>
+      <rect class="s-red" x="450" y="64" width="190" height="146" rx="10"/>
+      <text class="s-text-b" x="545" y="88" text-anchor="middle">AZ us-east-1c</text>
+      <text class="s-text" x="545" y="129" text-anchor="middle">✕ power cut</text>
+      <text class="s-text-s" x="545" y="176" text-anchor="middle">others keep running</text>
+    </svg>
+    <figcaption>One region, several isolated AZs. Running copies of your app in two or more AZs keeps it online if one AZ fails.</figcaption>
+  </figure>
+
+  <h3>How to choose a region</h3>
+  <ul>
+    <li><strong>Law and data rules.</strong> A European bank may require that its data never leaves Europe, so you'd pick Frankfurt or Ireland.</li>
+    <li><strong>Latency</strong> (the delay for a request to travel to the server and back). Put servers close to your users. A US customer hitting a server in Mumbai will feel the delay.</li>
+    <li><strong>Price and features.</strong> Prices differ a little between regions, and the newest services sometimes appear in a few regions first.</li>
+  </ul>
+  <p><strong>Why AZs exist:</strong> a fire, flood or power cut can take down a data center. If your app runs in only one AZ, it goes down too. Spreading copies across AZs gives you <strong>high availability</strong> (staying up even when parts fail).</p>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Most AWS resources belong to one region, and the console shows one region at a time (selector in the top-right). If a server you created "disappeared", check that you are looking at the right region. While learning, pick one region near you and keep everything there. Some newer regions are "opt-in" and must be enabled before use.</div>
+
+  <div class="demo" id="demo-az">
+    <div class="demo-head">Try it: pick a region, survive an outage</div>
+    <div class="demo-body">
+      <p><strong>Part 1.</strong> Pick a scenario to see which region fits and why.</p>
+      <div class="row" id="rg-btns">
+        <button class="btn" data-s="0" aria-pressed="false">German bank client</button>
+        <button class="btn" data-s="1" aria-pressed="false">Users mostly in India</button>
+        <button class="btn" data-s="2" aria-pressed="false">Users on US east coast</button>
+        <button class="btn" data-s="3" aria-pressed="false">Just learning AWS</button>
+      </div>
+      <div class="output" id="rg-out">Choose a scenario.</div>
+      <p style="margin-top:18px"><strong>Part 2.</strong> Tap the AZs where your app runs, then cause an outage.</p>
+      <div class="row" id="az-btns">
+        <button class="btn" data-az="a" aria-pressed="true">us-east-1a</button>
+        <button class="btn" data-az="b" aria-pressed="false">us-east-1b</button>
+        <button class="btn" data-az="c" aria-pressed="false">us-east-1c</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="az-fail">Outage hits:</label>
+        <select id="az-fail"><option value="a">us-east-1a</option><option value="b">us-east-1b</option><option value="c">us-east-1c</option></select>
+        <button class="btn primary" id="az-go">Simulate outage</button>
+      </div>
+      <div class="output" id="az-out">Your app runs in us-east-1a only.</div>
+    </div>
+  </div>
+
+  <h2>Who is responsible for what?</h2>
+  <p>Moving to the cloud doesn't hand over <em>all</em> the work. AWS calls this the <strong>shared responsibility model</strong>:</p>
+  <div class="grid-2">
+    <div class="card"><h3>AWS secures the cloud</h3><p>Buildings, hardware, power, cooling, the physical network and the virtualization layer.</p></div>
+    <div class="card"><h3>You secure what's in the cloud</h3><p>Who can log in, your data, firewall rules, your server's operating system updates and your application.</p></div>
+  </div>
+
+  <h2>Create your AWS account</h2>
+  <p>You'll use one account for the whole course. The sign-up screens change from time to time, but the steps are roughly:</p>
+  <ol class="steps">
+    <li>Go to the AWS website and choose <strong>Create an AWS account</strong>.</li>
+    <li>Enter an email address and an account name. This email becomes the <strong>root user</strong>, the account owner with unlimited power (more in <a href="03-iam.html">Lesson 3</a>). A fresh email just for AWS is a good idea. The account name can be changed later.</li>
+    <li>Verify the email with the code AWS sends you, then set a <strong>strong password</strong>.</li>
+    <li>Choose <strong>Personal</strong> (for learning), then enter your name, phone number and address. The address is used for billing and tax.</li>
+    <li>Add a <strong>debit or credit card</strong>. AWS makes a tiny temporary charge (around 1 USD or the local equivalent) to confirm the card is real, and releases it. This stops people from creating spam accounts. Not every card is accepted; use a proper card from a bank rather than "virtual card" workarounds.</li>
+    <li>Some countries ask for tax details (for example a PAN in India). Then verify your phone and pick the free <strong>Basic support</strong> plan.</li>
+  </ol>
+
+  <div class="callout warn"><span class="callout-title">Watch out: the free tier has limits</span>AWS's free tier lets you learn at little or no cost, but only within limits (for example, a set number of hours of a small server per month, or a pool of credits on newer accounts). Go beyond them and the charges are billed to your card. Always pick resources marked <strong>"Free tier eligible"</strong>, delete what you don't need, and set a budget alert (see <a href="36-reduce-aws-bill.html">Lesson 36</a>). Free tier terms change, so check AWS's current Free Tier page.</div>
+
+  <h3>A quick console tour</h3>
+  <p>The <strong>AWS Management Console</strong> is the website where you click to create and manage resources.</p>
+  <ul>
+    <li><strong>Search bar</strong> (top): type a service name like "EC2" or "IAM" to jump straight to it.</li>
+    <li><strong>Region selector</strong> (top right): the region you're currently working in.</li>
+    <li><strong>Account menu</strong> (top right): account ID, billing, security credentials, sign out.</li>
+    <li><strong>Recently visited</strong> and <strong>Favorites</strong>: shortcuts to services you use often.</li>
+  </ul>
+  <p>Clicking around isn't the only way in; later you'll also drive AWS from the terminal with the <a href="12-aws-cli.html">AWS CLI</a>.</p>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">What is the main difference between a private and a public cloud?</div>
+    <div class="opts"><button>Private clouds don't use virtualization</button><button>A private cloud is run by the company for itself; a public cloud is run by a provider and rented to anyone</button><button>Public clouds are only for websites</button></div>
+    <div class="explain">Both use virtualization. The difference is who owns and runs the data centers, and who is allowed to request resources.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your app runs on one server in us-east-1a. That AZ loses power. What happens, and what's the fix?</div>
+    <div class="opts"><button>Nothing: AWS moves it automatically to another region</button><button>The app is down; the fix is to move to a different region</button><button>The app is down; the fix is to run copies in two or more AZs</button></div>
+    <div class="explain">AZs are isolated so one failure doesn't take down the others, but only if your app actually runs in more than one AZ.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">According to the lesson, what's usually the first reason startups choose public cloud?</div>
+    <div class="opts"><button>Getting rid of the effort of running and maintaining a data center</button><button>Better-looking dashboards</button><button>Required by law</button></div>
+    <div class="explain">Cost matters, but avoiding the 24/7 work of buying, patching, cooling and guarding servers is the bigger win.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Virtualization splits one physical server into many VMs; the cloud delivers such resources on demand over a network.</li>
+      <li>Private cloud = your own data center for your own staff; public cloud = a provider rents resources to anyone; hybrid = a mix.</li>
+      <li>Public cloud wins mainly by removing maintenance work, then by pay-as-you-go cost and speed.</li>
+      <li>AWS leads the market (first mover), so it has the most jobs, and the concepts transfer to other clouds.</li>
+      <li>Regions are geographic areas; AZs are isolated data centers inside a region. Pick regions for law and latency, and use several AZs for high availability.</li>
+      <li>Stay inside free-tier limits and clean up: overage charges go to your card.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var SC = [
+    { r: "Frankfurt (eu-central-1)", why: "The bank's data must stay inside the EU (and ideally Germany). Data rules come before everything else." },
+    { r: "Mumbai (ap-south-1)", why: "Servers close to your users mean lower latency, so pages load faster." },
+    { r: "N. Virginia (us-east-1) or Ohio (us-east-2)", why: "Both are close to US east-coast users. us-east-1 is AWS's oldest and largest region." },
+    { r: "Any one region near you", why: "For learning, latency hardly matters. Keep everything in that one region so you always know where to look, and so you don't forget resources elsewhere." }
+  ];
+  var rgBtns = document.querySelectorAll("#rg-btns .btn");
+  var rgOut = document.getElementById("rg-out");
+  Array.prototype.forEach.call(rgBtns, function (b) {
+    b.addEventListener("click", function () {
+      var s = SC[+b.getAttribute("data-s")];
+      Array.prototype.forEach.call(rgBtns, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      rgOut.innerHTML = "";
+      var strong = document.createElement("strong");
+      strong.textContent = "Pick: " + s.r + ". ";
+      rgOut.appendChild(strong);
+      rgOut.appendChild(document.createTextNode(s.why));
+    });
+  });
+
+  var azBtns = document.querySelectorAll("#az-btns .btn");
+  var azOut = document.getElementById("az-out");
+  function running() {
+    var list = [];
+    Array.prototype.forEach.call(azBtns, function (b) { if (b.getAttribute("aria-pressed") === "true") list.push(b.getAttribute("data-az")); });
+    return list;
+  }
+  function describe() {
+    var r = running();
+    azOut.className = "output";
+    azOut.textContent = r.length ? "Your app runs in: " + r.map(function (z) { return "us-east-1" + z; }).join(", ") + "." : "Your app isn't running anywhere. Pick at least one AZ.";
+  }
+  Array.prototype.forEach.call(azBtns, function (b) {
+    b.addEventListener("click", function () {
+      b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      describe();
+    });
+  });
+  document.getElementById("az-go").addEventListener("click", function () {
+    var r = running();
+    var f = document.getElementById("az-fail").value;
+    if (!r.length) { describe(); return; }
+    var left = r.filter(function (z) { return z !== f; });
+    if (r.indexOf(f) < 0) {
+      azOut.className = "output ok";
+      azOut.textContent = "us-east-1" + f + " went down, but your app wasn't there. Still online.";
+    } else if (left.length) {
+      azOut.className = "output ok";
+      azOut.textContent = "us-east-1" + f + " went down. Your copy in " + left.map(function (z) { return "us-east-1" + z; }).join(", ") + " keeps serving users. Still online (high availability).";
+    } else {
+      azOut.className = "output bad";
+      azOut.textContent = "us-east-1" + f + " went down and it was your only AZ. Your app is offline. Add a second AZ and try again.";
+    }
+  });
+})();
+</script>
+</body>
+</html>

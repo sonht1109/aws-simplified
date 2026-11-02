@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IAM: Who Can Do What · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="03">
+<main class="wrap">
+  <header class="page-head">
+    <h1>IAM: Who Can Do What</h1>
+    <p class="lead">IAM (Identity and Access Management) decides who can get into your AWS account and what they are allowed to do once inside. It's the first service every DevOps engineer sets up, and one you'll use constantly.</p>
+  </header>
+
+  <h2>A bank, two checks</h2>
+  <p>Picture a bank. It has a service desk, an employee area, and a vault full of documents and cash. To keep it safe, the bank runs two separate checks:</p>
+  <ol class="steps">
+    <li><strong>Can you come in at all?</strong> Only known people (customers, staff) may enter the building.</li>
+    <li><strong>Once inside, where can you go and what can you do?</strong> A customer can use the service desk. An employee can use their laptop. Only a few senior staff can open the vault.</li>
+  </ol>
+  <p>Without these checks, anyone could walk straight into the vault. These two checks have names:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Authentication</h3><p><strong>"Who are you?"</strong> Proving your identity, for example with a username and password. Getting through the front door.</p></div>
+    <div class="card"><h3>Authorization</h3><p><strong>"What are you allowed to do?"</strong> The permissions you have after you're in. Which rooms you can enter and what you can touch.</p></div>
+  </div>
+  <p><strong>IAM is the AWS service that handles both</strong> for your AWS account.</p>
+
+  <h2>The root user: the master key</h2>
+  <p>When you created your account in <a href="02-intro-to-aws.html">Lesson 2</a>, you signed up with an email address. That login is the <strong>root user</strong>. It can do <em>everything</em>: delete any server, wipe any database, close the account.</p>
+  <p>Now imagine a company with 1,000 employees sharing that one root login. Someone, by mistake or on purpose, opens the database service and deletes production data. The data may be gone for good, and because everyone used the same login, <strong>nobody can even tell who did it</strong>.</p>
+  <div class="callout warn"><span class="callout-title">Rule #1: protect and don't use the root user</span>Never share root credentials. Turn on MFA for root right away, and use it only for the few tasks that truly need it (such as some billing and account settings). For daily work, create IAM users. While you're learning in your own practice account, using root briefly is tolerable, but build the habit early.</div>
+
+  <h2>The four building blocks</h2>
+  <p>IAM has four main parts. Each solves a specific problem.</p>
+
+  <h3>1. Users (authentication)</h3>
+  <p>An <strong>IAM user</strong> is an identity for one person (or one tool) inside your account, with its own login. When employee #501 joins and needs AWS access, the DevOps engineer creates an IAM user for them. Now every action can be traced to a specific person.</p>
+  <p>A user with <em>no permissions</em> can sign in but can't do anything useful, like being let into the bank lobby and then stopped at every door.</p>
+
+  <h3>2. Policies (authorization)</h3>
+  <p>A <strong>policy</strong> is a document that lists permissions: which actions are allowed (or denied) on which resources. You attach policies to users, groups or roles. Example: "user 501 can <em>read</em> the database but not <em>delete</em> anything from it."</p>
+  <ul>
+    <li><strong>AWS managed policies</strong>: ready-made by AWS, such as <code>AmazonS3ReadOnlyAccess</code> or <code>AmazonS3FullAccess</code>. Great for common cases.</li>
+    <li><strong>Customer managed (custom) policies</strong>: written by you when you need something more specific, such as access to <em>one</em> particular storage bucket only.</li>
+  </ul>
+
+  <h3>3. Groups (less repetitive work)</h3>
+  <p>People join and leave companies all the time. Attaching the same five policies to every new developer is slow and easy to get wrong. Instead you create <strong>groups</strong> (for example <em>Developers</em>, <em>QA</em>, <em>DB-Admins</em>, <em>Others</em>), attach policies to the group once, and drop each new user into the right group.</p>
+  <p>Even better: if all developers later need a new permission (say, to list servers), you add it to the group <strong>once</strong> and every member gets it, instead of editing four, forty or four hundred users.</p>
+
+  <h3>4. Roles (temporary access for services and outsiders)</h3>
+  <p>Sometimes the thing that needs access isn't a person. An application running on a server needs to read files from storage. A tool in another AWS account needs to deploy into yours. For these cases you use a <strong>role</strong>.</p>
+  <ul>
+    <li>A role has policies like a user does, but <strong>no permanent password or keys</strong>.</li>
+    <li>Someone or something trusted <strong>"assumes" the role</strong> and receives <strong>temporary credentials</strong> that expire automatically (typically within an hour or a few hours).</li>
+    <li>If those credentials leak, they soon stop working. That's much safer than baking a permanent password into an app.</li>
+  </ul>
+  <p>Typical uses: an EC2 server reading from S3, a Lambda function writing logs, a CI/CD pipeline deploying code, or access between two AWS accounts. You'll use roles in practice in the CI/CD lessons (<a href="17-codedeploy-cd.html">Lesson 17</a>).</p>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>A user is an employee ID card with your name on it. A role is a visitor badge from the front desk: it grants specific access and stops working at the end of the day.</div>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 330" role="img" aria-label="Users belong to groups; policies attach to groups; an EC2 app assumes a role to get temporary credentials for S3">
+      <defs><marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <text class="s-text-s" x="80" y="20" text-anchor="middle">USERS</text>
+      <text class="s-text-s" x="320" y="20" text-anchor="middle">GROUPS</text>
+      <text class="s-text-s" x="560" y="20" text-anchor="middle">POLICIES</text>
+      <rect class="s-blue" x="20" y="32" width="120" height="36" rx="18"/>
+      <text class="s-text" x="80" y="55" text-anchor="middle">dev-501</text>
+      <rect class="s-blue" x="20" y="80" width="120" height="36" rx="18"/>
+      <text class="s-text" x="80" y="103" text-anchor="middle">dev-502</text>
+      <rect class="s-blue" x="20" y="128" width="120" height="36" rx="18"/>
+      <text class="s-text" x="80" y="151" text-anchor="middle">qa-601</text>
+      <rect class="s-green" x="240" y="44" width="160" height="56" rx="10"/>
+      <text class="s-text-b" x="320" y="77" text-anchor="middle">Developers</text>
+      <rect class="s-green" x="240" y="118" width="160" height="50" rx="10"/>
+      <text class="s-text-b" x="320" y="148" text-anchor="middle">QA</text>
+      <path class="s-line" d="M140 50 L238 66" marker-end="url(#arr3)"/>
+      <path class="s-line" d="M140 98 L238 80" marker-end="url(#arr3)"/>
+      <path class="s-line" d="M140 146 L238 143" marker-end="url(#arr3)"/>
+      <rect class="s-orange-soft" x="480" y="32" width="180" height="36" rx="6"/>
+      <text class="s-text" x="570" y="55" text-anchor="middle">S3 full access</text>
+      <rect class="s-orange-soft" x="480" y="80" width="180" height="36" rx="6"/>
+      <text class="s-text" x="570" y="103" text-anchor="middle">EC2 full access</text>
+      <rect class="s-orange-soft" x="480" y="128" width="180" height="36" rx="6"/>
+      <text class="s-text" x="570" y="151" text-anchor="middle">S3 read-only</text>
+      <path class="s-line" d="M478 50 L402 66" marker-end="url(#arr3)"/>
+      <path class="s-line" d="M478 98 L402 80" marker-end="url(#arr3)"/>
+      <path class="s-line" d="M478 146 L402 143" marker-end="url(#arr3)"/>
+      <line class="s-dash" x1="20" y1="196" x2="660" y2="196"/>
+      <text class="s-text-s" x="20" y="220">Roles: for apps and services, with temporary credentials</text>
+      <rect class="s-box2" x="20" y="240" width="150" height="56" rx="8"/>
+      <text class="s-text-b" x="95" y="264" text-anchor="middle">App on EC2</text>
+      <text class="s-text-s" x="95" y="284" text-anchor="middle">no stored password</text>
+      <rect class="s-purple" x="250" y="240" width="170" height="56" rx="8"/>
+      <text class="s-text-b" x="335" y="264" text-anchor="middle">Role: read-s3</text>
+      <text class="s-text-s" x="335" y="284" text-anchor="middle">temp keys, auto-expire</text>
+      <rect class="s-blue" x="500" y="240" width="160" height="56" rx="8"/>
+      <text class="s-text-b" x="580" y="273" text-anchor="middle">S3 bucket</text>
+      <path class="s-line-o" d="M170 268 H248" marker-end="url(#arr3)"/>
+      <text class="s-text-s" x="209" y="258" text-anchor="middle">assumes</text>
+      <path class="s-line-o" d="M420 268 H498" marker-end="url(#arr3)"/>
+      <text class="s-text-s" x="459" y="258" text-anchor="middle">reads</text>
+    </svg>
+    <figcaption>Users join groups, policies attach to groups (or directly to users). Apps and services use roles instead of permanent credentials.</figcaption>
+  </figure>
+
+  <h2>What a policy looks like</h2>
+  <p>Policies are written in <strong>JSON</strong> (a simple text format of keys and values). Here is the core of AWS's managed <code>AmazonS3FullAccess</code> policy, simplified:</p>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "s3:*",
+      "Resource": "*"
+    }
+  ]
+}</code></pre>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Field</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>Version</code></td><td>The policy language version. Always <code>"2012-10-17"</code> (it's a fixed value, not today's date).</td></tr>
+      <tr><td><code>Statement</code></td><td>A list of rules. Each rule has the three fields below.</td></tr>
+      <tr><td><code>Effect</code></td><td><code>Allow</code> or <code>Deny</code>.</td></tr>
+      <tr><td><code>Action</code></td><td>Which API actions, written <code>service:Action</code>. <code>s3:*</code> means every S3 action; <code>s3:List*</code> means every S3 action starting with "List".</td></tr>
+      <tr><td><code>Resource</code></td><td>Which things it applies to. <code>*</code> means all; an ARN (Amazon Resource Name, a unique ID for one resource) narrows it down.</td></tr>
+    </tbody>
+  </table></div>
+  <p>A custom policy that only lets someone read files from <em>one</em> bucket might look like this:</p>
+<pre><code>{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetObject"],
+      "Resource": [
+        "arn:aws:s3:::my-app-bucket",
+        "arn:aws:s3:::my-app-bucket/*"
+      ]
+    }
+  ]
+}</code></pre>
+
+  <h3>How AWS decides: allow or deny?</h3>
+  <ol class="steps">
+    <li><strong>Everything starts as denied.</strong> If no policy says "Allow", the answer is no (an "implicit deny").</li>
+    <li><strong>An explicit "Deny" always wins.</strong> If any attached policy denies the action, it's blocked, even if another policy allows it.</li>
+    <li><strong>Otherwise, an "Allow" lets it through.</strong> Permissions from the user's own policies and from all their groups add up.</li>
+  </ol>
+
+  <div class="demo" id="demo-iam">
+    <div class="demo-head">Try it: IAM policy evaluator</div>
+    <div class="demo-body">
+      <p>Pick a user and an action. Toggle the extra policies and see how AWS decides.</p>
+      <div class="row">
+        <label for="iam-user">User</label>
+        <select id="iam-user">
+          <option value="dev">dev-501 (group: Developers)</option>
+          <option value="qa">qa-601 (group: QA)</option>
+          <option value="new">new-701 (no group)</option>
+        </select>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label for="iam-act">Action</label>
+        <select id="iam-act">
+          <option value="s3:ListAllMyBuckets">s3:ListAllMyBuckets (list buckets)</option>
+          <option value="s3:CreateBucket">s3:CreateBucket</option>
+          <option value="s3:DeleteBucket">s3:DeleteBucket</option>
+          <option value="ec2:DescribeInstances">ec2:DescribeInstances (list servers)</option>
+          <option value="ec2:RunInstances">ec2:RunInstances (launch server)</option>
+          <option value="iam:ChangePassword">iam:ChangePassword (own password)</option>
+          <option value="iam:CreateUser">iam:CreateUser</option>
+        </select>
+      </div>
+      <div style="margin-top:10px">
+        <label style="display:block"><input type="checkbox" id="iam-ec2"> Attach <code>AmazonEC2FullAccess</code> to the Developers group</label>
+        <label style="display:block"><input type="checkbox" id="iam-deny"> Attach a Deny <code>s3:DeleteBucket</code> policy to dev-501</label>
+      </div>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="iam-go">Evaluate</button></div>
+      <div class="output" id="iam-out">Result appears here.</div>
+    </div>
+  </div>
+
+  <h2>Hands-on: users, policies and groups</h2>
+  <p>This is the practical flow you'd follow in the console. Do it yourself in your account.</p>
+
+  <h3>Step A: create a user (authentication only)</h3>
+  <ol class="steps">
+    <li>Sign in, search for <strong>IAM</strong> in the console, open <strong>Users → Create user</strong>.</li>
+    <li>Name it, e.g. <code>test-user-501</code>. Tick <strong>Provide user access to the AWS Management Console</strong> and choose <strong>I want to create an IAM user</strong>. (The other option, IAM Identity Center, is AWS's recommended way to manage many people across many accounts; you can ignore it for now.)</li>
+    <li>Choose an <strong>auto-generated password</strong> and tick <strong>Users must create a new password at next sign-in</strong>. You don't invent passwords for people, and they set their own on first login.</li>
+    <li>Skip permissions for now and create the user. AWS automatically attaches one policy, <code>IAMUserChangePassword</code>, so the user can set their new password.</li>
+    <li>Copy or <strong>download the .csv</strong> with the username, password and the <strong>console sign-in URL</strong>, which contains your 12-digit account ID: <code>https://&lt;account-id&gt;.signin.aws.amazon.com/console</code>.</li>
+  </ol>
+  <p>Sign out, then sign in as an <strong>IAM user</strong> using the account ID, username and password. Set a new password. Now open S3 and try to list buckets: you get an <strong>access denied</strong> error saying you need <code>s3:ListAllMyBuckets</code>. Launching an EC2 server fails too. You're authenticated, but not authorized.</p>
+
+  <h3>Step B: add a policy (authorization)</h3>
+  <ol class="steps">
+    <li>Sign back in as an admin, open the user, choose <strong>Add permissions → Attach policies directly</strong>.</li>
+    <li>Search "S3" and pick <code>AmazonS3ReadOnlyAccess</code> (view only) or <code>AmazonS3FullAccess</code> (view, create, delete).</li>
+    <li>Sign in as the test user again. Now listing buckets works, and with full access, so does creating one. (Bucket names must be unique across all of AWS, so pick something unusual.)</li>
+  </ol>
+
+  <h3>Step C: use a group instead</h3>
+  <ol class="steps">
+    <li>Go to <strong>User groups → Create group</strong>, name it <code>development</code>, attach <code>AmazonS3FullAccess</code>.</li>
+    <li>Add your test users to the group.</li>
+    <li>Later, when the team asks for server access, open the group and attach <code>AmazonEC2FullAccess</code>. Every member gets it at once.</li>
+  </ol>
+
+  <div class="callout tip"><span class="callout-title">Clean up</span>When you finish practising, delete test users and groups you don't need. Unused logins are a security risk even when they cost nothing.</div>
+
+  <h2>Best practices</h2>
+  <ul>
+    <li><strong>Least privilege.</strong> Give each person or app only the permissions they need for their job, nothing more. Start small and add when needed. A new junior engineer might not get delete rights at all.</li>
+    <li><strong>Turn on MFA (multi-factor authentication).</strong> After the password, the user must also enter a short code from an authenticator app or tap a security key. A stolen password alone is then not enough. Enable it for root first, then for every human user.</li>
+    <li><strong>One identity per person.</strong> Never share logins, so you always know who did what.</li>
+    <li><strong>Manage permissions through groups,</strong> not user by user.</li>
+    <li><strong>Use roles for applications and AWS services</strong> instead of storing long-lived passwords or access keys in code. (Access keys for the command line are covered in <a href="12-aws-cli.html">Lesson 12</a>.)</li>
+  </ul>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Do you use the root user?" Good answer: "No. Root is locked down with MFA. Our DevOps team members each have their own IAM identity with admin-level access; developers and QA get IAM users placed in groups with least-privilege policies; applications use IAM roles. That way every action is traceable to a person."</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">A new IAM user can sign in but sees "access denied" everywhere. What's missing?</div>
+    <div class="opts"><button>Authentication</button><button>Authorization: no policy grants them any permissions</button><button>A role</button></div>
+    <div class="explain">Signing in proves who they are (authentication). They still need policies, directly or through a group, that allow actions (authorization).</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">An app on an EC2 server needs to read files from S3. What's the best way to give it access?</div>
+    <div class="opts"><button>Share the root user's password with the app</button><button>Create an IAM user and paste its permanent keys into the code</button><button>Attach an IAM role with S3 read permissions to the server</button></div>
+    <div class="explain">Roles give temporary credentials that rotate automatically, so nothing permanent is stored in the code.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">A user's group allows <code>s3:*</code>, but a policy on the user says Deny <code>s3:DeleteBucket</code>. Can they delete a bucket?</div>
+    <div class="opts"><button>No, an explicit Deny always wins</button><button>Yes, group permissions win</button><button>Yes, the broader rule wins</button></div>
+    <div class="explain">IAM checks for any explicit Deny first. If one matches, the action is blocked no matter how many Allows exist.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Authentication = who you are; authorization = what you may do. IAM handles both.</li>
+      <li>The root user can do everything: protect it with MFA, never share it, don't use it day to day.</li>
+      <li>Users are identities, policies (JSON with Effect / Action / Resource) are permissions, groups save repeated work, roles give temporary access to apps and services.</li>
+      <li>Default is deny; an explicit Deny beats any Allow.</li>
+      <li>Follow least privilege and enable MFA for every human.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var POL = {
+    S3Full: { name: "AmazonS3FullAccess", effect: "Allow", actions: ["s3:*"] },
+    S3RO: { name: "AmazonS3ReadOnlyAccess", effect: "Allow", actions: ["s3:Get*", "s3:List*"] },
+    EC2Full: { name: "AmazonEC2FullAccess", effect: "Allow", actions: ["ec2:*"] },
+    ChgPwd: { name: "IAMUserChangePassword", effect: "Allow", actions: ["iam:ChangePassword"] },
+    DenyDel: { name: "DenyDeleteBucket (custom)", effect: "Deny", actions: ["s3:DeleteBucket"] }
+  };
+  function matches(pattern, action) {
+    var re = new RegExp("^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$", "i");
+    return re.test(action);
+  }
+  function attached(user) {
+    var list = [];
+    var ec2 = document.getElementById("iam-ec2").checked;
+    var deny = document.getElementById("iam-deny").checked;
+    list.push({ p: POL.ChgPwd, via: "user" });
+    if (user === "dev") {
+      list.push({ p: POL.S3Full, via: "group Developers" });
+      if (ec2) list.push({ p: POL.EC2Full, via: "group Developers" });
+      if (deny) list.push({ p: POL.DenyDel, via: "user" });
+    } else if (user === "qa") {
+      list.push({ p: POL.S3RO, via: "group QA" });
+    }
+    return list;
+  }
+  var out = document.getElementById("iam-out");
+  function evaluate() {
+    var user = document.getElementById("iam-user").value;
+    var action = document.getElementById("iam-act").value;
+    var list = attached(user);
+    var allow = null, deny = null;
+    list.forEach(function (a) {
+      var hit = a.p.actions.some(function (pat) { return matches(pat, action); });
+      if (!hit) return;
+      if (a.p.effect === "Deny") deny = deny || a; else allow = allow || a;
+    });
+    var names = list.map(function (a) { return a.p.name + " (" + a.via + ")"; }).join(", ");
+    out.innerHTML = "";
+    var verdict = document.createElement("strong");
+    var why = document.createElement("div");
+    var pols = document.createElement("div");
+    pols.className = "muted";
+    pols.style.fontSize = "14px";
+    pols.style.marginTop = "6px";
+    pols.textContent = "Policies checked: " + names;
+    if (deny) {
+      out.className = "output bad";
+      verdict.textContent = "DENIED (explicit deny)";
+      why.textContent = deny.p.name + " denies " + action + ". An explicit Deny beats every Allow.";
+    } else if (allow) {
+      out.className = "output ok";
+      verdict.textContent = "ALLOWED";
+      why.textContent = allow.p.name + " (via " + allow.via + ") allows " + action + ".";
+    } else {
+      out.className = "output bad";
+      verdict.textContent = "DENIED (implicit deny)";
+      why.textContent = "No attached policy allows " + action + ", so the default answer is no.";
+    }
+    out.appendChild(verdict);
+    out.appendChild(why);
+    out.appendChild(pols);
+  }
+  document.getElementById("iam-go").addEventListener("click", evaluate);
+  ["iam-user", "iam-act", "iam-ec2", "iam-deny"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", evaluate);
+  });
+})();
+</script>
+</body>
+</html>

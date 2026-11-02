@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course Roadmap: AWS for DevOps · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="01">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Course Roadmap: AWS for DevOps</h1>
+    <p class="lead">A map of the whole course: what you will learn, in what order, and why each piece matters for someone who wants to work as a DevOps engineer on AWS.</p>
+  </header>
+
+  <h2>Who this course is for</h2>
+  <p>This course teaches AWS (Amazon Web Services) <strong>from zero</strong>, through the eyes of a DevOps engineer. You do not need any earlier knowledge of AWS or any other cloud provider.</p>
+  <ul>
+    <li><strong>Goal: job-ready skills, not a certificate.</strong> The focus is on what DevOps engineers actually do every day, not on memorising exam facts.</li>
+    <li><strong>Theory + practice.</strong> Most lessons explain the idea first, then walk through a hands-on demo in the AWS console or terminal.</li>
+    <li><strong>Projects and interview questions</strong> appear along the way, so you can talk about real work in interviews.</li>
+    <li><strong>DevOps services only.</strong> AWS has 200+ services. We skip areas like machine learning and focus on the services a DevOps engineer uses most.</li>
+  </ul>
+
+  <div class="callout tip"><span class="callout-title">Good news</span>Cloud concepts carry over. If you learn AWS well, moving to Azure or Google Cloud later is mostly about learning new names for the same ideas. Interviewers know this, so being strong in one cloud is enough to start.</div>
+
+  <h2>What does a DevOps engineer do on AWS?</h2>
+  <p>A <strong>DevOps engineer</strong> sits between the people who write code (developers) and the systems that run it. On AWS, the day-to-day work usually looks like this:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Control access</h3><p>Create users and groups, give each person only the permissions they need, and keep the main (root) account locked away.</p></div>
+    <div class="card"><h3>Run servers</h3><p>Launch virtual servers, install tools and applications on them (for example Jenkins), and make them reachable.</p></div>
+    <div class="card"><h3>Design the network</h3><p>Build private networks, decide what is public and what is hidden, and add firewalls so only the right traffic gets in.</p></div>
+    <div class="card"><h3>Automate everything</h3><p>Write templates and scripts so infrastructure is created by code, and build pipelines that test and deploy code automatically.</p></div>
+    <div class="card"><h3>Watch and react</h3><p>Monitor CPU, logs and errors, set alarms, and trigger small functions that fix or report problems automatically.</p></div>
+    <div class="card"><h3>Keep it safe and cheap</h3><p>Store passwords securely, check that resources follow company rules, and clean up anything that wastes money.</p></div>
+  </div>
+  <p>Notice that you rarely "just deploy an app". Around every application you also set up access, networking, security, DNS, monitoring and automation. That is why this course covers all of them.</p>
+
+  <h2>The roadmap at a glance</h2>
+  <p>Lessons build on each other. Early lessons give you an account and the basics; later lessons combine them into real projects.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 420" role="img" aria-label="Course roadmap: ten stages from Foundations to Containers, then advanced topics">
+      <defs><marker id="arr1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <!-- row 1 left to right -->
+      <rect class="s-orange-soft" x="10" y="20" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="68" y="50" text-anchor="middle">Foundations</text>
+      <text class="s-text-s" x="68" y="72" text-anchor="middle">Lessons 1–2</text>
+      <rect class="s-red" x="146" y="20" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="204" y="50" text-anchor="middle">IAM access</text>
+      <text class="s-text-s" x="204" y="72" text-anchor="middle">Lesson 3</text>
+      <rect class="s-blue" x="282" y="20" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="340" y="50" text-anchor="middle">EC2 servers</text>
+      <text class="s-text-s" x="340" y="72" text-anchor="middle">Lessons 4–5</text>
+      <rect class="s-green" x="418" y="20" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="476" y="50" text-anchor="middle">Networking</text>
+      <text class="s-text-s" x="476" y="72" text-anchor="middle">Lessons 6–8</text>
+      <rect class="s-purple" x="554" y="20" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="612" y="44" text-anchor="middle">Project +</text>
+      <text class="s-text-b" x="612" y="62" text-anchor="middle">interview</text>
+      <text class="s-text-s" x="612" y="82" text-anchor="middle">Lessons 9–10</text>
+      <path class="s-line" d="M126 56 H144" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M262 56 H280" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M398 56 H416" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M534 56 H552" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M612 92 V128" marker-end="url(#arr1)"/>
+      <!-- row 2 right to left -->
+      <rect class="s-blue" x="554" y="132" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="612" y="162" text-anchor="middle">S3 + CLI</text>
+      <text class="s-text-s" x="612" y="184" text-anchor="middle">Lessons 11–12</text>
+      <rect class="s-orange-soft" x="418" y="132" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="476" y="156" text-anchor="middle">Infra as</text>
+      <text class="s-text-b" x="476" y="174" text-anchor="middle">Code (CFT)</text>
+      <text class="s-text-s" x="476" y="194" text-anchor="middle">Lesson 13</text>
+      <rect class="s-green" x="282" y="132" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="340" y="162" text-anchor="middle">CI/CD</text>
+      <text class="s-text-s" x="340" y="184" text-anchor="middle">Lessons 14–17</text>
+      <rect class="s-purple" x="146" y="132" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="204" y="156" text-anchor="middle">Monitor +</text>
+      <text class="s-text-b" x="204" y="174" text-anchor="middle">serverless</text>
+      <text class="s-text-s" x="204" y="194" text-anchor="middle">Lessons 18–21</text>
+      <rect class="s-red" x="10" y="132" width="116" height="72" rx="10"/>
+      <text class="s-text-b" x="68" y="162" text-anchor="middle">Containers</text>
+      <text class="s-text-s" x="68" y="184" text-anchor="middle">Lessons 22–24</text>
+      <path class="s-line" d="M554 168 H536" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M418 168 H400" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M282 168 H264" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M146 168 H128" marker-end="url(#arr1)"/>
+      <path class="s-line" d="M68 204 V240" marker-end="url(#arr1)"/>
+      <!-- row 3 -->
+      <rect class="s-ink" x="10" y="244" width="660" height="156" rx="12"/>
+      <text class="s-text-w" x="340" y="272" text-anchor="middle">Going further (Lessons 25–40)</text>
+      <rect class="s-orange" x="30" y="290" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="128" y="315" text-anchor="middle">Secrets · Config</text>
+      <rect class="s-orange" x="242" y="290" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="340" y="315" text-anchor="middle">Terraform · ELB</text>
+      <rect class="s-orange" x="454" y="290" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="552" y="315" text-anchor="middle">Migration · Career</text>
+      <rect class="s-orange" x="30" y="342" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="128" y="367" text-anchor="middle">3-tier · EKS projects</text>
+      <rect class="s-orange" x="242" y="342" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="340" y="367" text-anchor="middle">Scripts · Billing</text>
+      <rect class="s-orange" x="454" y="342" width="196" height="40" rx="8"/>
+      <text class="s-text-ink" x="552" y="367" text-anchor="middle">New tools · Cache</text>
+    </svg>
+    <figcaption>The course follows a snake path: foundations first, then services that build on each other, then advanced projects.</figcaption>
+  </figure>
+
+  <h2>Stage by stage</h2>
+  <ol class="steps">
+    <li><strong>Foundations (<a href="02-intro-to-aws.html">Lesson 2</a>).</strong> What "the cloud" is, private vs public cloud, why companies move to AWS, regions, and creating your own AWS account that you will use for the rest of the course.</li>
+    <li><strong>IAM (<a href="03-iam.html">Lesson 3</a>).</strong> The first real service. You learn how to create users, groups and permissions so that nobody shares the all-powerful root login.</li>
+    <li><strong>EC2 (<a href="04-ec2.html">Lessons 4</a>–<a href="05-connect-to-ec2.html">5</a>).</strong> Launch a virtual server, log into it, install Jenkins, and open it from your laptop's browser. Your first deployed application.</li>
+    <li><strong>Networking and security (<a href="06-vpc.html">Lessons 6</a>–<a href="08-route53.html">8</a>).</strong> Private networks (VPC), firewalls (security groups and NACLs) and DNS (Route 53). Many people find this the hardest part, so it is taught in a cloud-neutral way that also makes sense on other clouds.</li>
+    <li><strong>First production-style project (<a href="09-vpc-production-project.html">Lesson 9</a>) and interview scenarios (<a href="10-interview-ec2-iam-vpc.html">Lesson 10</a>).</strong> Combine everything so far, the way a real team would.</li>
+    <li><strong>Storage and tooling (<a href="11-s3.html">Lessons 11</a>–<a href="13-cloudformation.html">13</a>).</strong> S3 object storage and static websites, the AWS CLI, and Infrastructure as Code with CloudFormation, so you stop clicking and start scripting.</li>
+    <li><strong>CI/CD (<a href="14-cicd-codecommit.html">Lessons 14</a>–<a href="17-codedeploy-cd.html">17</a>).</strong> Build a full pipeline with AWS's developer tools: source, build, deploy.</li>
+    <li><strong>Monitoring, serverless and delivery (<a href="18-cloudwatch.html">Lessons 18</a>–<a href="21-cloudfront.html">21</a>).</strong> CloudWatch alarms, Lambda functions, an automated cost-saving project, and CloudFront.</li>
+    <li><strong>Containers (<a href="22-ecr.html">Lessons 22</a>–<a href="24-eks.html">24</a>).</strong> Store images in ECR, run them on ECS, and go deeper on Kubernetes with EKS, which most companies use.</li>
+    <li><strong>Going further (Lessons 25–40).</strong> Secrets management, Terraform, compliance checks, load balancers, migration strategies, career tips, and bigger end-to-end projects.</li>
+  </ol>
+
+  <div class="callout warn"><span class="callout-title">Don't skip around too early</span>Some lessons are deliberately linked. For example the CI/CD lessons (14–17) build one pipeline across four lessons, and the monitoring and Lambda lessons feed into the cost project. Skipping one can break the flow of a project.</div>
+
+  <div class="demo" id="demo-path">
+    <div class="demo-head">Try it: build your learning path</div>
+    <div class="demo-body">
+      <p>Pick what you want to get out of the course. You'll get a suggested order of lessons (you can still do everything later).</p>
+      <div class="row" id="path-btns" role="group" aria-label="Learning goals">
+        <button class="btn" data-goal="beginner" aria-pressed="false">Total beginner</button>
+        <button class="btn" data-goal="job" aria-pressed="false">Land a DevOps job</button>
+        <button class="btn" data-goal="cicd" aria-pressed="false">Build CI/CD</button>
+        <button class="btn" data-goal="containers" aria-pressed="false">Run containers</button>
+        <button class="btn" data-goal="iac" aria-pressed="false">Infra as Code</button>
+        <button class="btn" data-goal="cost" aria-pressed="false">Cut AWS costs</button>
+      </div>
+      <div class="output" id="path-out">Choose a goal above.</div>
+    </div>
+  </div>
+
+  <h2>Prerequisites</h2>
+  <p>For AWS itself: <strong>none</strong>. Everything AWS-specific is explained from the start. A few general skills make the journey smoother:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Skill</th><th>Why it helps</th><th>Needed from</th></tr></thead>
+    <tbody>
+      <tr><td>Basic Linux commands (<code>cd</code>, <code>ls</code>, <code>chmod</code>, <code>sudo</code>, <code>apt</code>)</td><td>You will log into Linux servers and install software.</td><td>Lesson 4</td></tr>
+      <tr><td>Git basics</td><td>Pipelines start from a code repository.</td><td>Lesson 14</td></tr>
+      <tr><td>Container basics (what Docker images are)</td><td>Needed for ECR, ECS and EKS. A short primer is in <a href="22-ecr.html">Lesson 22</a>.</td><td>Lesson 16</td></tr>
+      <tr><td>A little Python</td><td>Lambda automation examples use Python, the most common DevOps scripting language.</td><td>Lesson 19</td></tr>
+      <tr><td>A debit or credit card</td><td>AWS asks for one when you open an account, to verify you are a real person.</td><td>Lesson 2</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>How to get the most out of it</h2>
+  <ul>
+    <li><strong>Do every practical yourself.</strong> Watching is not the same as clicking through the console and hitting your first error.</li>
+    <li><strong>Stay in the free tier and clean up.</strong> Stop or delete what you create after each lesson. A forgotten server is the most common surprise bill (see <a href="36-reduce-aws-bill.html">Lesson 36</a>).</li>
+    <li><strong>Keep notes and turn projects into resume points.</strong> The projects (Lessons 9, 16–17, 20, 24, 26, 32–34) are designed to be discussed in interviews.</li>
+    <li><strong>Practise explaining.</strong> Interviews often ask "how would you…" scenario questions. After each lesson, try explaining the "why" out loud.</li>
+  </ul>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">What is the main focus of this course?</div>
+    <div class="opts"><button>Passing an AWS certification exam</button><button>Covering every one of AWS's 200+ services</button><button>Job-ready AWS skills for DevOps work, with practicals and projects</button></div>
+    <div class="explain">The course is built around what DevOps engineers do every day, not exam preparation or every possible service.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which service do you learn first after creating your account, and why?</div>
+    <div class="opts"><button>IAM, so you can set up safe access instead of sharing the root login</button><button>EKS, because Kubernetes is the most popular</button><button>CloudWatch, so you can monitor costs</button></div>
+    <div class="explain">Access comes first. Once you have your own IAM user with the right permissions, every other service can be used safely.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">You know AWS well but a job uses Azure. How big a problem is that?</div>
+    <div class="opts"><button>Huge: nothing carries over</button><button>Manageable: the cloud concepts are the same, mostly the names and screens differ</button><button>You must re-learn networking from scratch</button></div>
+    <div class="explain">Concepts like virtual servers, private networks, access control and pipelines exist on every cloud. Interviewers usually accept strong experience in one cloud.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>The course starts from zero and is aimed at DevOps jobs, not certificates.</li>
+      <li>A DevOps engineer on AWS handles access, servers, networking, automation, monitoring, security and cost, not just "deploying apps".</li>
+      <li>The order matters: account → IAM → EC2 → networking → storage/IaC → CI/CD → monitoring/serverless → containers → advanced projects.</li>
+      <li>No AWS knowledge is needed; basic Linux and Git will help a lot.</li>
+      <li>Practise every demo yourself and clean up afterwards to avoid surprise bills.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var PATHS = {
+    beginner: { why: "Start with the foundations and build up one service at a time.", lessons: [2, 3, 4, 5, 6, 7, 8, 9] },
+    job: { why: "Core services interviewers ask about, a production project, then interview and career prep.", lessons: [3, 4, 6, 7, 9, 10, 13, 15, 24, 29, 31] },
+    cicd: { why: "CI/CD concepts first, then build a full pipeline, plus the registry it pushes images to.", lessons: [14, 15, 16, 17, 22, 37] },
+    containers: { why: "Registry first, then orchestration, then real Kubernetes projects.", lessons: [22, 23, 24, 33, 40] },
+    iac: { why: "Learn the IaC idea with CloudFormation, the CLI that goes with it, then Terraform.", lessons: [12, 13, 26, 34] },
+    cost: { why: "Monitoring and Lambda give you the tools; the last two lessons apply them to your bill.", lessons: [18, 19, 20, 36] }
+  };
+  var pages = window.AWS_PAGES || [];
+  function info(n) {
+    for (var i = 0; i < pages.length; i++) if (pages[i].n === n) return pages[i];
+    return null;
+  }
+  var btns = document.querySelectorAll("#path-btns .btn");
+  var out = document.getElementById("path-out");
+  function show(goal) {
+    var p = PATHS[goal];
+    Array.prototype.forEach.call(btns, function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-goal") === goal ? "true" : "false"); });
+    out.innerHTML = "";
+    var why = document.createElement("p");
+    why.style.margin = "0 0 8px";
+    why.textContent = p.why;
+    out.appendChild(why);
+    var ol = document.createElement("ol");
+    ol.style.margin = "0";
+    ol.style.paddingLeft = "22px";
+    p.lessons.forEach(function (n) {
+      var li = document.createElement("li");
+      var pg = info(n);
+      if (pg) {
+        var a = document.createElement("a");
+        a.href = pg.slug + ".html";
+        a.textContent = "Lesson " + n + ": " + pg.title;
+        li.appendChild(a);
+      } else {
+        li.textContent = "Lesson " + n;
+      }
+      ol.appendChild(li);
+    });
+    out.appendChild(ol);
+  }
+  Array.prototype.forEach.call(btns, function (b) {
+    b.addEventListener("click", function () { show(b.getAttribute("data-goal")); });
+  });
+})();
+</script>
+</body>
+</html>

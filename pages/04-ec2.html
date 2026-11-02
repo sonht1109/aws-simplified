@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EC2: Virtual Servers · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="04">
+<main class="wrap">
+  <header class="page-head">
+    <h1>EC2: Virtual Servers</h1>
+    <p class="lead">EC2 lets you rent a virtual server from AWS in minutes. You'll learn what it is, why companies use it, how to pick the right type, and then launch one and deploy Jenkins on it so you can open it from your own browser.</p>
+  </header>
+
+  <h2>What is EC2?</h2>
+  <p><strong>EC2</strong> stands for <strong>Elastic Compute Cloud</strong> (two Cs, hence "EC2"). Each word means something:</p>
+  <div class="grid-2">
+    <div class="card"><h3>Compute</h3><p>A bundle of CPU, memory (RAM) and disk. In other words, a <strong>server</strong>. Each one you launch is called an <strong>instance</strong>.</p></div>
+    <div class="card"><h3>Cloud</h3><p>It runs in AWS's data centers, not yours. AWS uses <a href="02-intro-to-aws.html">virtualization</a> to carve its big physical servers into many virtual machines and hands you one.</p></div>
+    <div class="card"><h3>Elastic</h3><p>You can scale it up or down: make it bigger, smaller, add disk, or add more instances. AWS uses "Elastic" in many service names for this reason (Elastic Load Balancing, Elastic Kubernetes Service, Elastic Beanstalk…).</p></div>
+  </div>
+  <p>So an EC2 instance is simply <strong>a virtual server you rent from AWS, which you can resize when your needs change</strong>.</p>
+
+  <h2>Why use EC2 instead of your own servers?</h2>
+  <p>You <em>could</em> buy physical servers, install a hypervisor, and hand out VMs yourself. Creating 1,000 VMs with a script is the easy part. The hard part comes after:</p>
+  <ul>
+    <li>keeping the hardware and virtualization layer patched and upgraded,</li>
+    <li>checking for security problems,</li>
+    <li>fixing things when a server dies at 2 a.m. and developers can't work.</li>
+  </ul>
+  <p>With EC2, AWS handles the physical hardware and the virtualization layer. Two big wins:</p>
+  <ol class="steps">
+    <li><strong>Less maintenance.</strong> No hardware to look after.</li>
+    <li><strong>Lower cost, pay as you go.</strong> AWS buys hardware at huge scale, and you pay only while an instance runs. Nobody using the test servers at night or over the holidays? Stop them and stop paying for compute.</li>
+  </ol>
+  <div class="callout"><span class="callout-title">Note</span>AWS manages the hardware, but <em>you</em> still look after what runs inside the instance: operating system updates, installed software and your app. See the shared responsibility model in <a href="02-intro-to-aws.html">Lesson 2</a>.</div>
+
+  <h2>Instance types: pick the right shape</h2>
+  <p>Just like buying a physical server, you choose what it's strong at. AWS groups instance types into <strong>families</strong>:</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Family</th><th>Strong at</th><th>Typical uses</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><strong>General purpose</strong></td><td>A balance of CPU, memory and network</td><td>Web servers, dev/test, small apps, tools like Jenkins</td><td><code>t3.micro</code>, <code>m7i.large</code></td></tr>
+      <tr><td><strong>Compute optimized</strong></td><td>More CPU power per GB of memory</td><td>Gaming servers, batch processing, ML inference, video encoding</td><td><code>c7i.xlarge</code></td></tr>
+      <tr><td><strong>Memory optimized</strong></td><td>Lots of RAM</td><td>In-memory databases and caches, real-time big-data analytics</td><td><code>r7i.2xlarge</code></td></tr>
+      <tr><td><strong>Storage optimized</strong></td><td>Very fast local disks</td><td>Large databases, data warehouses, log processing</td><td><code>i4i.large</code></td></tr>
+      <tr><td><strong>Accelerated computing</strong></td><td>GPUs or special chips</td><td>Training ML models, graphics rendering</td><td><code>g5.xlarge</code>, <code>p5.48xlarge</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Throughout this course you'll use small <strong>general purpose</strong> instances. The launch steps are identical for every type; only the type you pick (and the price) changes. Bigger and specialized types cost more. AWS adds new types over time, so check the official "Amazon EC2 instance types" page when choosing for real.</p>
+
+  <h3>Reading an instance type name</h3>
+  <p>A name like <code>m7g.2xlarge</code> breaks down as:</p>
+  <ul>
+    <li><code>m</code>: the <strong>family</strong> (general purpose)</li>
+    <li><code>7</code>: the <strong>generation</strong> (higher = newer, usually better value)</li>
+    <li><code>g</code>: optional <strong>attributes</strong> (here: AWS Graviton, an ARM-based processor)</li>
+    <li><code>2xlarge</code>: the <strong>size</strong>. Roughly, each step up (large → xlarge → 2xlarge → 4xlarge…) doubles CPU and memory.</li>
+  </ul>
+
+  <div class="demo" id="demo-type">
+    <div class="demo-head">Try it: instance type picker and decoder</div>
+    <div class="demo-body">
+      <p><strong>Pick a workload</strong> to see which family fits.</p>
+      <div class="row" id="ty-btns">
+        <button class="btn" data-w="web" aria-pressed="false">Website / Jenkins</button>
+        <button class="btn" data-w="game" aria-pressed="false">Game server</button>
+        <button class="btn" data-w="cache" aria-pressed="false">In-memory cache</button>
+        <button class="btn" data-w="db" aria-pressed="false">Huge database</button>
+        <button class="btn" data-w="ml" aria-pressed="false">Train an ML model</button>
+        <button class="btn" data-w="learn" aria-pressed="false">Learning AWS</button>
+      </div>
+      <div class="output" id="ty-out">Choose a workload.</div>
+      <p style="margin-top:18px"><strong>Decode a name.</strong> Type any instance type.</p>
+      <div class="row">
+        <input type="text" id="dc-in" value="m7g.2xlarge" aria-label="Instance type name" style="flex:1 1 160px" autocomplete="off" spellcheck="false">
+        <button class="btn primary" id="dc-go">Decode</button>
+      </div>
+      <div class="output" id="dc-out">Result appears here.</div>
+    </div>
+  </div>
+
+  <h2>Where does it run?</h2>
+  <p>Every instance lives in a <strong>region</strong> (e.g. Mumbai, Frankfurt) and inside one <strong>Availability Zone</strong> of that region. Pick regions close to your users or required by data rules, and spread important apps across AZs.</p>
+  <div class="xref-box"><div>Regions and Availability Zones are explained in <a href="02-intro-to-aws.html">Lesson 2: Introduction to AWS</a>.</div></div>
+
+  <h2>The pieces you choose at launch</h2>
+  <h3>AMI: the starting disk image</h3>
+  <p>An <strong>AMI (Amazon Machine Image)</strong> is a template for the instance's disk: the operating system plus any pre-installed software. AWS offers AMIs for Ubuntu, Amazon Linux, Red Hat, Debian, SUSE, Windows and more, and each comes in several versions. You can also build your own AMI with your app already installed, so new servers start ready to go.</p>
+
+  <h3>Key pair: how you log in</h3>
+  <p>By default, Linux instances on AWS have <strong>password login turned off</strong>. Instead you use a <strong>key pair</strong>: two matching keys.</p>
+  <ul>
+    <li>The <strong>public key</strong> is placed on the instance by AWS.</li>
+    <li>The <strong>private key</strong> (a <code>.pem</code> file) is downloaded once to your computer. Only you have it.</li>
+  </ul>
+  <p>When you connect, the server checks that your private key matches its public key. Share the public key freely; <strong>never share the private key</strong>. AWS doesn't keep a copy, so if you lose it you can't download it again.</p>
+  <div class="xref-box"><div>How to actually connect with the key (SSH, MobaXterm, PuTTY, file permissions) is covered in <a href="05-connect-to-ec2.html">Lesson 5: Connecting to EC2</a>.</div></div>
+
+  <h3>Public and private IP addresses</h3>
+  <ul>
+    <li><strong>Public IP</strong>: reachable from the internet. You use it to log in and to open your app from your laptop.</li>
+    <li><strong>Private IP</strong>: only works inside AWS's network. Servers use it to talk to each other.</li>
+  </ul>
+  <p>The automatic public IP changes if you stop and start the instance. (A fixed one, called an Elastic IP, is available if you need it.) Private networks and subnets are explained in <a href="06-vpc.html">Lesson 6: VPC</a>.</p>
+
+  <h3>Free tier and cost</h3>
+  <p>Always pick options marked <strong>"Free tier eligible"</strong>. Under the classic free tier, that's a small instance (<code>t2.micro</code> or <code>t3.micro</code>, depending on the region) for <strong>750 hours per month</strong>, enough to run <em>one</em> instance all month. Two instances running all month use 1,500 hours, so you'd pay for the extra. Newer accounts may get a credit-based free plan instead; check what your account shows.</p>
+  <div class="callout warn"><span class="callout-title">Stop vs terminate</span><strong>Stop</strong> = switch off. You stop paying for compute, but the disk is kept (and storage is still billed beyond free limits). <strong>Terminate</strong> = delete the instance for good. When you finish practising, terminate what you don't need.</div>
+
+  <h2>Hands-on: launch an instance and deploy Jenkins</h2>
+  <p>Jenkins is a popular automation server (a Java web application) used for CI/CD. It makes a perfect first app for a DevOps engineer.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 260" role="img" aria-label="Your browser reaches the EC2 instance's public IP on port 8080 through the security group, where Jenkins is running">
+      <defs><marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box2" x="16" y="80" width="140" height="96" rx="10"/>
+      <text class="s-text-b" x="86" y="112" text-anchor="middle">Your laptop</text>
+      <text class="s-text-s" x="86" y="134" text-anchor="middle">browser</text>
+      <text class="s-text-s" x="86" y="154" text-anchor="middle">+ SSH terminal</text>
+      <path class="s-line-o" d="M156 110 H300" marker-end="url(#arr4)"/>
+      <text class="s-text-s" x="200" y="100" text-anchor="middle">http://IP:8080</text>
+      <path class="s-line" d="M156 150 H300" marker-end="url(#arr4)"/>
+      <text class="s-text-s" x="200" y="172" text-anchor="middle">ssh (port 22)</text>
+      <rect class="s-dash" x="250" y="30" width="414" height="206" rx="12"/>
+      <text class="s-text-s" x="264" y="52">AWS region · one Availability Zone</text>
+      <rect class="s-red" x="304" y="70" width="24" height="126" rx="4"/>
+      <text class="s-text-s" x="316" y="222" text-anchor="middle">firewall</text>
+      <rect class="s-blue" x="352" y="70" width="290" height="126" rx="10"/>
+      <text class="s-text-b" x="497" y="94" text-anchor="middle">EC2 instance (Ubuntu)</text>
+      <text class="s-text-s" x="497" y="114" text-anchor="middle">public IP 3.x.x.x · private IP 172.31.x.x</text>
+      <rect class="s-orange" x="376" y="128" width="242" height="48" rx="8"/>
+      <text class="s-text-ink" x="497" y="157" text-anchor="middle">Jenkins on port 8080</text>
+    </svg>
+    <figcaption>You log in over SSH (port 22) and open Jenkins in a browser on port 8080. The firewall (security group) must allow both ports.</figcaption>
+  </figure>
+
+  <h3>1. Launch the instance</h3>
+  <ol class="steps">
+    <li>In the console, search for <strong>EC2</strong>, open <strong>Instances</strong>, click <strong>Launch instance</strong>.</li>
+    <li><strong>Name</strong>: e.g. <code>my-first-instance</code>.</li>
+    <li><strong>AMI</strong>: choose <strong>Ubuntu</strong>, a free-tier-eligible version.</li>
+    <li><strong>Instance type</strong>: the free-tier-eligible micro type.</li>
+    <li><strong>Key pair</strong>: <strong>Create new key pair</strong>, type RSA, format <code>.pem</code>, give it a name like <code>aws-login</code>. The file downloads automatically. Keep it safe.</li>
+    <li><strong>Network settings</strong>: leave the defaults for now (they allow SSH). Networking is covered properly in Lessons 6–7.</li>
+    <li><strong>Storage</strong>: the default is a small disk (about 8 GB). That's disk space, not RAM, and enough for this demo.</li>
+    <li>Click <strong>Launch instance</strong> and wait until the state shows <strong>Running</strong>. Open the instance and copy its <strong>Public IPv4 address</strong>.</li>
+  </ol>
+
+  <h3>2. Connect to it</h3>
+  <p>On Mac or Linux (or Windows PowerShell), from the folder with your key:</p>
+<pre><code>chmod 400 aws-login.pem
+ssh -i aws-login.pem ubuntu@&lt;PUBLIC-IP&gt;</code></pre>
+  <p><code>ubuntu</code> is the default login name on Ubuntu AMIs. If you see "permissions are too open", the <code>chmod</code> line fixes it. Windows tools and every error message are explained in <a href="05-connect-to-ec2.html">Lesson 5</a>.</p>
+  <p>Once in, <code>whoami</code> prints <code>ubuntu</code>. Use <code>sudo</code> for admin commands (or <code>sudo su -</code> to become root on the server).</p>
+
+  <h3>3. Install Java and Jenkins</h3>
+<pre><code># refresh the package list (always do this on a new server)
+sudo apt update
+
+# Jenkins needs Java
+sudo apt install -y fontconfig openjdk-21-jre
+java -version
+
+# add the Jenkins apt repository: copy the current two commands
+# (download key + add repo) from jenkins.io → Installing Jenkins → Linux → Debian/Ubuntu
+sudo apt update
+sudo apt install -y jenkins
+
+# check it is running
+sudo systemctl status jenkins</code></pre>
+  <div class="callout tip"><span class="callout-title">Tip</span>Jenkins' required Java version and its repository key change over time, so always copy the repository commands from the official Jenkins install page instead of an old blog post. Also, a micro instance has only about 1 GB of RAM, so Jenkins will be slow. That's fine for a demo.</div>
+
+  <h3>4. Open port 8080 so your browser can reach it</h3>
+  <p>Jenkins listens on <strong>port 8080</strong>. Browse to <code>http://&lt;PUBLIC-IP&gt;:8080</code> and… nothing loads. AWS blocks incoming traffic by default; only SSH was allowed at launch.</p>
+  <ol class="steps">
+    <li>Open the instance → <strong>Security</strong> tab → click its <strong>security group</strong> (the instance's firewall).</li>
+    <li><strong>Edit inbound rules</strong> (inbound = traffic coming <em>in</em> to the instance) → <strong>Add rule</strong>.</li>
+    <li>Type <strong>Custom TCP</strong>, port <strong>8080</strong>, source <strong>My IP</strong>. ("Anywhere IPv4", <code>0.0.0.0/0</code>, also works but opens it to the whole internet.) Save.</li>
+  </ol>
+  <div class="xref-box"><div>Security groups, inbound vs outbound rules, and NACLs are explained in <a href="07-security-groups-nacl.html">Lesson 7: Security Groups vs NACLs</a>.</div></div>
+
+  <h3>5. Unlock Jenkins</h3>
+  <p>Reload <code>http://&lt;PUBLIC-IP&gt;:8080</code>. Jenkins asks for an initial admin password, which it saved on the server:</p>
+<pre><code>sudo cat /var/lib/jenkins/secrets/initialAdminPassword</code></pre>
+  <p>Paste it in, and the Jenkins setup screen appears. You've just deployed your first application on AWS and reached it from the outside world.</p>
+  <p>When you're done, <strong>stop or terminate</strong> the instance so it doesn't eat your free hours.</p>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Jenkins is running on the instance, but <code>http://IP:8080</code> won't load in your browser. Most likely cause?</div>
+    <div class="opts"><button>Jenkins only works inside AWS</button><button>The security group has no inbound rule allowing port 8080</button><button>You picked the wrong region</button></div>
+    <div class="explain">Incoming traffic is blocked unless a security group rule allows it. Add an inbound Custom TCP rule for port 8080.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">You need to run a large in-memory cache. Which family fits best?</div>
+    <div class="opts"><button>Compute optimized (c)</button><button>Storage optimized (i)</button><button>Memory optimized (r)</button></div>
+    <div class="explain">In-memory caches and databases need lots of RAM, which is what memory optimized types offer.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">What does an AMI provide?</div>
+    <div class="opts"><button>The operating system and software the instance starts with</button><button>The CPU and RAM size</button><button>The private key for logging in</button></div>
+    <div class="explain">The AMI is the disk template. CPU and RAM come from the instance type; the key pair handles login.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>EC2 (Elastic Compute Cloud) gives you resizable virtual servers; AWS handles the hardware, you handle what runs inside.</li>
+      <li>Pick an instance family by workload: general purpose, compute, memory, storage or accelerated. Names read as family + generation + attributes + size.</li>
+      <li>A launch needs a name, an AMI (OS image), an instance type, a key pair, network settings and storage.</li>
+      <li>Log in with your private key over SSH; reach apps on the public IP, but only after a security group rule opens the port.</li>
+      <li>Stay on free-tier types and stop or terminate instances when you're done.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var W = {
+    web: ["General purpose", "t3 / m7i", "Balanced CPU and memory suits web servers and tools like Jenkins. Burstable t-types are cheap for spiky, light load."],
+    game: ["Compute optimized", "c7i / c7g", "Game servers and number-crunching need lots of CPU relative to memory."],
+    cache: ["Memory optimized", "r7i / x2idn", "Caches and in-memory databases keep everything in RAM, so you want the most memory per dollar."],
+    db: ["Storage optimized", "i4i / d3", "Very fast local disks for databases and data warehouses doing heavy reads and writes."],
+    ml: ["Accelerated computing", "p5 / g5", "GPUs process many calculations in parallel, ideal for training models and rendering."],
+    learn: ["General purpose (free tier)", "t2.micro / t3.micro", "The free-tier-eligible micro type is enough for every demo in this course."]
+  };
+  var tyBtns = document.querySelectorAll("#ty-btns .btn");
+  var tyOut = document.getElementById("ty-out");
+  Array.prototype.forEach.call(tyBtns, function (b) {
+    b.addEventListener("click", function () {
+      var w = W[b.getAttribute("data-w")];
+      Array.prototype.forEach.call(tyBtns, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+      tyOut.innerHTML = "";
+      var s = document.createElement("strong");
+      s.textContent = w[0] + " → e.g. " + w[1] + ". ";
+      tyOut.appendChild(s);
+      tyOut.appendChild(document.createTextNode(w[2]));
+    });
+  });
+
+  var FAM = {
+    t: "General purpose, burstable (cheap; CPU can burst briefly)",
+    m: "General purpose (balanced)",
+    a: "General purpose, ARM (first Graviton)",
+    mac: "macOS instances",
+    c: "Compute optimized",
+    r: "Memory optimized",
+    x: "Memory optimized, extra-large memory",
+    u: "Memory optimized, very high memory",
+    z: "Memory optimized, high CPU frequency",
+    i: "Storage optimized (fast NVMe disks)",
+    d: "Storage optimized (dense HDD storage)",
+    h: "Storage optimized (HDD throughput)",
+    im: "Storage optimized",
+    is: "Storage optimized",
+    p: "Accelerated computing (GPUs for ML training)",
+    g: "Accelerated computing (GPUs for graphics/ML)",
+    inf: "Accelerated computing (AWS Inferentia chips)",
+    trn: "Accelerated computing (AWS Trainium chips)",
+    f: "Accelerated computing (FPGAs)",
+    vt: "Accelerated computing (video transcoding)",
+    dl: "Accelerated computing (deep learning)",
+    hpc: "High performance computing"
+  };
+  var ATT = { a: "AMD processor", g: "AWS Graviton (ARM) processor", i: "Intel processor", d: "local NVMe disk", n: "extra network bandwidth", e: "extra memory or storage", z: "high CPU frequency", b: "extra disk (EBS) performance", q: "Qualcomm chips", "-flex": "flexible (cheaper, flexible CPU usage)" };
+  var SIZE = ["nano", "micro", "small", "medium", "large", "xlarge"];
+  var dcOut = document.getElementById("dc-out");
+  function decode() {
+    var v = document.getElementById("dc-in").value.trim().toLowerCase();
+    var m = /^([a-z]+?)(\d+)([a-z]*(?:-flex)?)\.([0-9]*(?:xlarge)|nano|micro|small|medium|large|metal(?:-\d+xl)?)$/.exec(v);
+    dcOut.innerHTML = "";
+    if (!m) {
+      dcOut.className = "output bad";
+      dcOut.textContent = "That doesn't look like an instance type. Try something like t3.micro, c7i.4xlarge or r6gd.large.";
+      return;
+    }
+    var fam = FAM[m[1]];
+    var atts = [];
+    var rest = m[3];
+    var flex = /-flex$/.test(rest);
+    rest = rest.replace(/-flex$/, "");
+    rest.split("").forEach(function (ch) { atts.push(ATT[ch] ? ATT[ch] : "'" + ch + "' (see AWS docs)"); });
+    if (flex) atts.push(ATT["-flex"]);
+    var size = m[4];
+    var sizeNote = size === "metal" || /^metal/.test(size) ? "the whole physical server, no virtualization layer"
+      : SIZE.indexOf(size) >= 0 && SIZE.indexOf(size) < 4 ? "a small size"
+      : "each step up roughly doubles CPU and memory";
+    dcOut.className = fam ? "output ok" : "output";
+    var rows = [
+      ["Family", m[1] + " = " + (fam || "not one I know; check the AWS docs")],
+      ["Generation", m[2] + (+m[2] >= 6 ? " (recent)" : " (older generation)")],
+      ["Attributes", m[3] ? m[3] + " = " + atts.join(", ") : "none"],
+      ["Size", size + " (" + sizeNote + ")"]
+    ];
+    rows.forEach(function (r) {
+      var d = document.createElement("div");
+      var b = document.createElement("strong");
+      b.textContent = r[0] + ": ";
+      d.appendChild(b);
+      d.appendChild(document.createTextNode(r[1]));
+      dcOut.appendChild(d);
+    });
+  }
+  document.getElementById("dc-go").addEventListener("click", decode);
+  document.getElementById("dc-in").addEventListener("keydown", function (e) { if (e.key === "Enter") decode(); });
+})();
+</script>
+</body>
+</html>

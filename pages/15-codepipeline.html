@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CodePipeline vs Jenkins · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="15">
+<main class="wrap">
+  <header class="page-head">
+    <h1>CodePipeline vs Jenkins</h1>
+    <p class="lead">AWS CodePipeline is AWS's managed pipeline orchestrator. The quickest way to understand it is to compare it with a Jenkins setup you may already know. You'll see how CodeCommit, CodePipeline, CodeBuild and CodeDeploy fit together, and how to explain in an interview when to choose CodePipeline and when to choose Jenkins.</p>
+  </header>
+
+  <div class="xref-box"><div>New to CI/CD? Continuous integration, delivery and pipeline stages are explained in <a href="14-cicd-codecommit.html">Lesson 14: CI/CD Basics &amp; CodeCommit</a>.</div></div>
+
+  <h2>The classic Jenkins flow</h2>
+  <ol class="steps">
+    <li>A developer commits a change (e.g. to a <code>.java</code> or <code>.html</code> file) and pushes it to a Git host such as <strong>GitHub</strong>, GitLab or Bitbucket.</li>
+    <li>A <strong>webhook</strong>, an automatic "something happened" message from GitHub, triggers the <strong>Jenkins pipeline</strong>. The pipeline is written in Groovy, as a declarative or scripted pipeline.</li>
+    <li>Jenkins <strong>implements CI</strong> itself: checkout → build and unit tests → static code analysis (SonarQube) → Docker image build → image scan → image push.</li>
+    <li>Jenkins then <strong>invokes CD</strong>, handing the deployment to another tool: <strong>Argo CD</strong> or Flux (GitOps, the modern way), Spinnaker, or older approaches like Ansible or shell scripts running <code>kubectl</code>/<code>helm</code>.</li>
+    <li>The app lands on <strong>Kubernetes</strong> or virtual machines.</li>
+  </ol>
+  <div class="callout"><span class="callout-title">Note</span><strong>GitOps</strong> means Git is the single source of truth for what should be running. A tool like Argo CD keeps checking the cluster against Git and puts back anything someone changed by hand. Similar in spirit to CloudFormation's <a href="13-cloudformation.html">drift detection</a>, except Argo CD fixes the drift automatically.</div>
+
+  <h2>The same flow with AWS managed services</h2>
+  <ol class="steps">
+    <li>The developer pushes code to <strong>CodeCommit</strong>, or, more commonly, to GitHub connected to AWS.</li>
+    <li>The change triggers <strong>CodePipeline</strong>, which takes Jenkins's place as the orchestrator.</li>
+    <li>CodePipeline <strong>invokes CI</strong> by calling <strong>CodeBuild</strong>, which runs the build, tests, scans and image push (<a href="16-codebuild-ci.html">Lesson 16</a>).</li>
+    <li>CodePipeline <strong>invokes CD</strong> by calling <strong>CodeDeploy</strong>, which rolls the app out to EC2 instances, on-prem servers, ECS or Lambda (<a href="17-codedeploy-cd.html">Lesson 17</a>).</li>
+  </ol>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 680 320" role="img" aria-label="Top row: developer, GitHub, Jenkins pipeline which implements CI, Argo CD for CD, then Kubernetes or EC2. Bottom row: developer, CodeCommit or GitHub, CodePipeline which invokes CodeBuild for CI and CodeDeploy for CD, then EC2, ECS or Lambda.">
+      <defs><marker id="arr15a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <text class="s-text-b" x="10" y="22">Jenkins setup</text>
+      <rect class="s-box" x="10" y="34" width="92" height="62" rx="8"/>
+      <text class="s-text-b" x="56" y="70" text-anchor="middle">Developer</text>
+      <rect class="s-box2" x="116" y="34" width="110" height="62" rx="8"/>
+      <text class="s-text-b" x="171" y="62" text-anchor="middle">GitHub</text>
+      <text class="s-text-s" x="171" y="82" text-anchor="middle">webhook</text>
+      <rect class="s-orange-soft" x="240" y="34" width="150" height="62" rx="8"/>
+      <text class="s-text-b" x="315" y="62" text-anchor="middle">Jenkins pipeline</text>
+      <text class="s-text-s" x="315" y="82" text-anchor="middle">implements CI</text>
+      <rect class="s-purple" x="404" y="34" width="120" height="62" rx="8"/>
+      <text class="s-text-b" x="464" y="62" text-anchor="middle">Argo CD</text>
+      <text class="s-text-s" x="464" y="82" text-anchor="middle">CD (invoked)</text>
+      <rect class="s-green" x="538" y="34" width="132" height="62" rx="8"/>
+      <text class="s-text-b" x="604" y="62" text-anchor="middle">Kubernetes</text>
+      <text class="s-text-s" x="604" y="82" text-anchor="middle">or EC2</text>
+      <path class="s-line" d="M102 65 H114" marker-end="url(#arr15a)"/>
+      <path class="s-line" d="M226 65 H238" marker-end="url(#arr15a)"/>
+      <path class="s-line" d="M390 65 H402" marker-end="url(#arr15a)"/>
+      <path class="s-line" d="M524 65 H536" marker-end="url(#arr15a)"/>
+      <path class="s-dash" d="M10 124 H670"/>
+      <text class="s-text-b" x="10" y="154">AWS managed setup</text>
+      <rect class="s-box" x="10" y="182" width="92" height="62" rx="8"/>
+      <text class="s-text-b" x="56" y="218" text-anchor="middle">Developer</text>
+      <rect class="s-box2" x="116" y="182" width="110" height="62" rx="8"/>
+      <text class="s-text-b" x="171" y="208" text-anchor="middle">CodeCommit</text>
+      <text class="s-text-s" x="171" y="228" text-anchor="middle">or GitHub</text>
+      <rect class="s-ink" x="240" y="182" width="150" height="62" rx="8"/>
+      <text class="s-text-w" x="315" y="210" text-anchor="middle">CodePipeline</text>
+      <text class="s-text-w" x="315" y="230" text-anchor="middle" style="font-weight:400;font-size:12px">invokes CI + CD</text>
+      <rect class="s-orange-soft" x="404" y="164" width="120" height="50" rx="8"/>
+      <text class="s-text-b" x="464" y="186" text-anchor="middle">CodeBuild</text>
+      <text class="s-text-s" x="464" y="204" text-anchor="middle">CI</text>
+      <rect class="s-purple" x="404" y="230" width="120" height="50" rx="8"/>
+      <text class="s-text-b" x="464" y="252" text-anchor="middle">CodeDeploy</text>
+      <text class="s-text-s" x="464" y="270" text-anchor="middle">CD</text>
+      <rect class="s-green" x="538" y="224" width="132" height="62" rx="8"/>
+      <text class="s-text-b" x="604" y="250" text-anchor="middle">EC2 / ECS</text>
+      <text class="s-text-s" x="604" y="270" text-anchor="middle">or Lambda</text>
+      <path class="s-line" d="M102 213 H114" marker-end="url(#arr15a)"/>
+      <path class="s-line" d="M226 213 H238" marker-end="url(#arr15a)"/>
+      <path class="s-line-o" d="M390 202 L402 192" marker-end="url(#arr15a)"/>
+      <path class="s-line-o" d="M390 228 L402 246" marker-end="url(#arr15a)"/>
+      <path class="s-line" d="M524 255 H536" marker-end="url(#arr15a)"/>
+    </svg>
+    <figcaption>Put the two pictures side by side: GitHub ↔ CodeCommit, Jenkins ↔ CodePipeline, Jenkins build stages ↔ CodeBuild, Argo CD ↔ CodeDeploy.</figcaption>
+  </figure>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>Note the wording: Jenkins usually <strong>implements</strong> CI (the stages run inside Jenkins) and <strong>invokes</strong> CD. CodePipeline usually <strong>invokes both</strong>: it does very little work itself and calls CodeBuild and CodeDeploy. You <em>can</em> skip CodeBuild and run scripts in other ways, but CodePipeline + CodeBuild + CodeDeploy is the standard pattern.</div>
+
+  <h2>How a CodePipeline is put together</h2>
+  <ul>
+    <li><strong>Pipeline</strong>: the whole workflow for one app.</li>
+    <li><strong>Stages</strong>: run in order, e.g. <code>Source</code> → <code>Build</code> → <code>Approval</code> → <code>Deploy</code>. If a stage fails, the pipeline stops there.</li>
+    <li><strong>Actions</strong>: the tasks inside a stage, each run by a <em>provider</em>: GitHub/CodeCommit/S3 for source, CodeBuild for build/test, CodeDeploy/ECS/CloudFormation for deploy, a manual approval, or a Lambda invoke.</li>
+    <li><strong>Artifacts</strong>: the files passed from one stage to the next (source code, build output). CodePipeline stores them in an S3 artifact bucket.</li>
+    <li><strong>Trigger</strong>: usually a push to a branch, received through a connection to your Git host.</li>
+  </ul>
+  <div class="callout warn"><span class="callout-title">Watch out</span>CodeDeploy deploys to EC2/on-prem servers, ECS and Lambda, not to EKS. For Kubernetes on AWS, teams typically run <code>kubectl</code>/<code>helm</code> from a CodeBuild step, or use a GitOps tool like Argo CD (see <a href="24-eks.html">Lesson 24: EKS</a>).</div>
+
+  <h2>If Jenkins is free, why pay for CodePipeline?</h2>
+  <p>Jenkins software is free, but <em>running</em> it isn't. A typical Jenkins setup has a main server plus <strong>worker nodes</strong> (agents) that run the builds. As teams add pipelines, two agents become 4, 8, 16, 20 virtual machines, and someone has to:</p>
+  <ul>
+    <li>scale them up and down,</li>
+    <li>apply security patches and upgrade plugins,</li>
+    <li>watch their health, clean up disks and replace broken nodes.</li>
+  </ul>
+  <p>Often that needs a dedicated engineer. AWS spotted this management burden, as it did with compute (EC2) and storage (S3), and offers CodePipeline as a <strong>managed, pay-as-you-go</strong> service. Startups and small teams that don't want to babysit CI servers find that very appealing.</p>
+  <h3>…and why Jenkins is still more popular</h3>
+  <ul>
+    <li><strong>Managing it isn't always hard.</strong> With <em>Docker agents</em>, each build runs in a container that's created on demand and deleted afterwards, so a couple of servers can handle a lot. You can also run Jenkins on EC2 with <a href="09-vpc-production-project.html">Auto Scaling</a> and <a href="18-cloudwatch.html">CloudWatch</a> alarms.</li>
+    <li><strong>No lock-in.</strong> A Jenkinsfile kept in Git works on AWS, Azure, GCP or on-prem. If your company moves clouds or goes hybrid, you move Jenkins and keep your pipelines. CodePipeline definitions only work on AWS.</li>
+    <li><strong>Huge ecosystem.</strong> Thousands of plugins and integrations with almost any tool.</li>
+    <li><strong>Cost control.</strong> Pay-as-you-go services can get expensive if they're used carelessly.</li>
+  </ul>
+
+  <div class="table-wrap"><table>
+    <thead><tr><th></th><th>Jenkins</th><th>AWS CodePipeline</th></tr></thead>
+    <tbody>
+      <tr><td>Type</td><td>Open-source tool you host</td><td>Fully managed AWS service</td></tr>
+      <tr><td>Cost</td><td>Free software; you pay for servers and the people who run them</td><td>Pay as you go; no servers to run</td></tr>
+      <tr><td>Who maintains it</td><td>You: scaling, patching, plugins, backups</td><td>AWS</td></tr>
+      <tr><td>Portability</td><td>Any cloud or on-prem</td><td>AWS only</td></tr>
+      <tr><td>Integrations</td><td>Thousands of plugins</td><td>Mainly AWS services, plus GitHub and some partners</td></tr>
+      <tr><td>Typical role</td><td>Implements CI, invokes CD</td><td>Orchestrates: invokes CodeBuild (CI) and CodeDeploy (CD)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="demo" id="demo-pick">
+    <div class="demo-head">Try it: Jenkins or CodePipeline?</div>
+    <div class="demo-body">
+      <p>Answer four questions about a company and see which tool fits better, and why.</p>
+      <div id="pk-qs"></div>
+      <div class="output" id="pk-out"></div>
+    </div>
+  </div>
+
+  <div class="callout tip"><span class="callout-title">Tip</span>Learning CodePipeline is still worthwhile even if Jenkins, GitHub Actions or GitLab CI are more common. Some companies want everything on AWS managed services, and the pipeline ideas carry over to any tool.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">In a standard AWS setup, which service does CodePipeline call to run the build and unit tests?</div>
+    <div class="opts"><button>CodeDeploy</button><button>CodeBuild</button><button>CodeCommit</button></div>
+    <div class="explain">CodeBuild handles the CI work. CodeDeploy handles deployment, and CodeCommit only hosts code.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Your company runs half its workloads on AWS and half on Azure. Which choice is safer for pipelines?</div>
+    <div class="opts"><button>Jenkins (or another cloud-neutral CI tool)</button><button>CodePipeline</button><button>Both are equally portable</button></div>
+    <div class="explain">CodePipeline only works on AWS. Jenkins pipelines stored in Git can run anywhere.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">What's the main benefit a startup gets from CodePipeline?</div>
+    <div class="opts"><button>It's free</button><button>It has more plugins than Jenkins</button><button>No CI servers to scale, patch or monitor: AWS manages it</button></div>
+    <div class="explain">The selling point is the managed service. You pay per use instead of paying engineers to run CI infrastructure.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><strong>CodePipeline ↔ Jenkins</strong>, CodeCommit ↔ GitHub, CodeBuild ↔ CI build stages, CodeDeploy ↔ Argo CD/Ansible.</li>
+      <li>A pipeline is made of <strong>stages</strong> (Source, Build, Approval, Deploy…) containing <strong>actions</strong>. Artifacts pass between them through S3.</li>
+      <li>Jenkins usually implements CI and invokes CD. CodePipeline invokes both, via CodeBuild and CodeDeploy.</li>
+      <li>Pick CodePipeline for an AWS-only shop that doesn't want to run CI servers. Pick Jenkins for portability, plugins and full control.</li>
+      <li>In real setups, CodePipeline is usually paired with <strong>GitHub</strong> rather than CodeCommit.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var Q = [
+    { t: "Is everything on AWS, with no plans to use another cloud?", yes: ["cp", 2, "AWS-only, so lock-in isn't a real risk"], no: ["jk", 3, "Multi-cloud or hybrid, so you need pipelines that move with you"] },
+    { t: "Do you have engineers with time to run and patch CI servers?", yes: ["jk", 2, "You can run Jenkins efficiently (e.g. with Docker agents)"], no: ["cp", 2, "Nobody to manage CI servers, so a managed service saves real effort"] },
+    { t: "Do you rely on many third-party tools and plugins?", yes: ["jk", 2, "Jenkins's plugin ecosystem covers almost anything"], no: ["cp", 1, "AWS-native integrations are enough"] },
+    { t: "Are you a small team or startup that wants zero servers to manage?", yes: ["cp", 2, "Pay-as-you-go with nothing to maintain"], no: ["jk", 1, "Bigger teams can absorb the upkeep for more control"] }
+  ];
+  var ans = [null, null, null, null], wrap = $("pk-qs");
+  Q.forEach(function (q, i) {
+    var row = document.createElement("div");
+    row.style.cssText = "margin:8px 0";
+    var p = document.createElement("div");
+    p.textContent = (i + 1) + ". " + q.t;
+    p.style.cssText = "font-weight:600;font-size:15px";
+    var r = document.createElement("div"); r.className = "row";
+    ["Yes", "No"].forEach(function (lbl) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = lbl; b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () {
+        ans[i] = lbl === "Yes";
+        Array.prototype.forEach.call(r.children, function (x) { x.setAttribute("aria-pressed", x === b ? "true" : "false"); });
+        score();
+      });
+      r.appendChild(b);
+    });
+    row.appendChild(p); row.appendChild(r); wrap.appendChild(row);
+  });
+  function score() {
+    var cp = 0, jk = 0, why = { cp: [], jk: [] }, n = 0;
+    ans.forEach(function (a, i) {
+      if (a === null) return;
+      n++;
+      var w = a ? Q[i].yes : Q[i].no;
+      if (w[0] === "cp") cp += w[1]; else jk += w[1];
+      why[w[0]].push(w[2]);
+    });
+    var out = $("pk-out");
+    if (!n) { out.className = "output"; out.textContent = "Answer the questions above."; return; }
+    var winner = cp === jk ? null : (cp > jk ? "cp" : "jk");
+    var title = winner === "cp" ? "Leaning: AWS CodePipeline (+ CodeBuild + CodeDeploy)" : winner === "jk" ? "Leaning: Jenkins" : "It's a tie: either can work";
+    out.className = "output ok";
+    out.innerHTML = "<strong></strong> <span class='muted'></span><ul style='margin:6px 0 0;padding-left:20px'></ul>";
+    out.firstChild.textContent = title;
+    out.children[1].textContent = "(" + n + "/4 answered · CodePipeline " + cp + " vs Jenkins " + jk + ")";
+    var ul = out.querySelector("ul");
+    ["cp", "jk"].forEach(function (k) {
+      why[k].forEach(function (t) {
+        var li = document.createElement("li");
+        li.textContent = (k === "cp" ? "CodePipeline: " : "Jenkins: ") + t;
+        ul.appendChild(li);
+      });
+    });
+  }
+  score();
+})();
+</script>
+</body>
+</html>

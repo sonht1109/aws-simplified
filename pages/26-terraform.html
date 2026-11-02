@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terraform with AWS · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="26">
+<main class="wrap">
+  <header class="page-head">
+    <h1>Terraform with AWS</h1>
+    <p class="lead">Learn the Terraform basics (providers, resources, variables, state, plan and apply), then use them to build a real project: a VPC with two public subnets, two web servers, an S3 bucket and an Application Load Balancer, all from code.</p>
+  </header>
+
+  <div class="xref-box"><div>New to Infrastructure as Code? The idea, and how declarative tools compare, is explained in <a href="13-cloudformation.html">Lesson 13: CloudFormation</a>. This lesson is about Terraform itself.</div></div>
+
+  <h2>What is Terraform?</h2>
+  <p><b>Terraform</b> is an Infrastructure as Code tool made by HashiCorp. You describe the resources you want in text files ending in <code>.tf</code>, and Terraform creates, changes or deletes real cloud resources until they match your files.</p>
+  <ul>
+    <li>The files are written in <b>HCL</b> (HashiCorp Configuration Language). It reads a lot like JSON or YAML: blocks, names and <code>key = value</code> pairs.</li>
+    <li>It works with many platforms (AWS, Azure, Google Cloud, OpenStack, Alibaba Cloud…), not only AWS.</li>
+    <li>It is fast and repeatable. Building a setup 100 times by clicking in the console takes hours; with Terraform it's one command each time. If everything is lost, you can run the code again and get it back.</li>
+  </ul>
+
+  <div class="callout tip"><span class="callout-title">Learn the console first</span>Terraform only writes down what you would otherwise click. If you don't know that a subnet needs a route table association, or that a load balancer needs a target group and a listener, Terraform won't tell you. Build the setup by hand once (see <a href="09-vpc-production-project.html">Lesson 9</a>), then automate it. Keep the AWS console and the Terraform docs open side by side while you write code.</div>
+
+  <h2>Before you start</h2>
+  <ol class="steps">
+    <li><b>Install Terraform</b> and the AWS CLI. Check with <code>terraform -version</code> and <code>aws --version</code>.</li>
+    <li><b>Create access keys</b> for an IAM user (IAM → your user → <i>Security credentials</i> → <i>Create access key</i>). Terraform talks to AWS through its API, so it needs keys, not a console password. Never share them.</li>
+    <li><b>Run <code>aws configure</code></b> and paste the keys and a region (for example <code>us-east-1</code>). Terraform's AWS provider reads these saved credentials automatically. Details in <a href="12-aws-cli.html">Lesson 12: AWS CLI</a>.</li>
+    <li><b>Check permissions.</b> Terraform can only do what the IAM user is allowed to do. If the user has no EC2 or VPC permissions, <code>apply</code> fails. See <a href="03-iam.html">Lesson 3: IAM</a>.</li>
+    <li><b>Optional:</b> install the official <i>HashiCorp Terraform</i> extension in VS Code for autocomplete and syntax highlighting.</li>
+  </ol>
+
+  <div class="callout warn"><span class="callout-title">Watch out</span>The provider docs let you put <code>access_key</code> and <code>secret_key</code> directly in the provider block, but they also warn against it. Hard-coded keys end up in Git. Use <code>aws configure</code>, environment variables or a role instead.</div>
+
+  <h2>The building blocks</h2>
+  <div class="grid-2">
+    <div class="card"><h3>Provider</h3><p>The plugin that lets Terraform talk to a platform's API. <code>provider "aws"</code> means "build things on AWS". You find every provider and its versions in the Terraform Registry.</p></div>
+    <div class="card"><h3>Resource</h3><p>One thing to create, for example <code>resource "aws_vpc" "myvpc"</code>. The first label is the <b>type</b> (fixed by the provider), the second is a <b>local name</b> that only Terraform uses. It's not the name you see in the console.</p></div>
+    <div class="card"><h3>Variable</h3><p>An input value kept in one place (usually <code>variables.tf</code>) and used as <code>var.name</code>. Change it once, and every place that uses it follows.</p></div>
+    <div class="card"><h3>Output</h3><p>A value Terraform prints after <code>apply</code>, for example the load balancer's DNS name. Handy when you don't have console access.</p></div>
+    <div class="card"><h3>State</h3><p>The file <code>terraform.tfstate</code>, where Terraform remembers what it already created. It compares your code with the state to work out what to change. Don't edit it by hand, and <b>never push it to GitHub</b>: it can contain secrets.</p></div>
+    <div class="card"><h3>Data source</h3><p>A read-only lookup of something that already exists, for example "find the latest Ubuntu AMI". Declared with a <code>data</code> block instead of <code>resource</code>.</p></div>
+  </div>
+
+  <h2>The Terraform workflow</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Command</th><th>What it does</th></tr>
+    <tr><td><code>terraform init</code></td><td>Prepares the folder and downloads the provider plugins. Run it first, and again after adding a provider.</td></tr>
+    <tr><td><code>terraform fmt</code></td><td>Formats your code neatly (aligns the <code>=</code> signs, fixes indentation).</td></tr>
+    <tr><td><code>terraform validate</code></td><td>Checks syntax and references, and tells you the file and line of any mistake.</td></tr>
+    <tr><td><code>terraform plan</code></td><td>A dry run: shows what <i>would</i> be created, changed or destroyed. Nothing is touched.</td></tr>
+    <tr><td><code>terraform apply</code></td><td>Shows the plan again, asks you to type <code>yes</code>, then makes the changes. <code>-auto-approve</code> skips the question.</td></tr>
+    <tr><td><code>terraform destroy</code></td><td>Deletes everything this configuration created. Use it when you finish practising so you don't get billed.</td></tr>
+  </table></div>
+  <p>In the plan output, <b><code>+</code></b> means create, <b><code>~</code></b> means change in place, <b><code>-</code></b> means destroy, and <b><code>-/+</code></b> means destroy and re-create (needed when a setting can't be changed on a live resource). The summary line reads like <code>Plan: 7 to add, 0 to change, 0 to destroy.</code></p>
+
+  <div class="demo" id="demo-plan">
+    <div class="demo-head">Try it: plan &amp; apply simulator</div>
+    <div class="demo-body">
+      <p>The checkboxes are your <code>.tf</code> code. The "state" column is what Terraform remembers creating. Edit the code, press <b>Plan</b> to see the diff, then <b>Apply</b> to make the state match. Try unticking the VPC while subnets still use it, or changing the VPC CIDR after it exists.</p>
+      <div id="tf-rows" style="display:grid;gap:8px;margin-bottom:12px"></div>
+      <div class="row">
+        <button class="btn primary" id="tf-plan">terraform plan</button>
+        <button class="btn" id="tf-apply">terraform apply</button>
+        <button class="btn" id="tf-destroy">terraform destroy</button>
+      </div>
+      <pre class="output" id="tf-out" style="white-space:pre-wrap;margin:0">Press "terraform plan" to start. The state is empty, so everything in the code will be created.</pre>
+    </div>
+  </div>
+
+  <h2>The project we'll build</h2>
+  <p>This is the same setup as the production-style VPC project, now written as code. To keep it simple, both web servers sit in <b>public</b> subnets.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 700 400" role="img" aria-label="Architecture: users reach an internet gateway and an application load balancer in a VPC; the load balancer spreads traffic to two EC2 web servers in two public subnets in different availability zones; an S3 bucket sits outside the VPC">
+      <defs><marker id="arr26" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-ink" x="270" y="8" width="160" height="36" rx="8"/>
+      <text class="s-text-w" x="350" y="31" text-anchor="middle">Users (internet)</text>
+      <path class="s-line" d="M350 44 V70" marker-end="url(#arr26)"/>
+      <rect class="s-dash" x="20" y="74" width="540" height="314" rx="10"/>
+      <text class="s-text-b" x="34" y="96">VPC 10.0.0.0/16</text>
+      <rect class="s-purple" x="280" y="62" width="140" height="30" rx="6"/>
+      <text class="s-text-b" x="350" y="82" text-anchor="middle">Internet gateway</text>
+      <path class="s-line" d="M350 92 V118" marker-end="url(#arr26)"/>
+      <rect class="s-orange" x="230" y="122" width="240" height="40" rx="8"/>
+      <text class="s-text-ink" x="350" y="147" text-anchor="middle">Application Load Balancer</text>
+      <text class="s-text-s" x="350" y="178" text-anchor="middle">listener :80 → target group (health check on /)</text>
+      <path class="s-line-o" d="M300 162 L170 240" marker-end="url(#arr26)"/>
+      <path class="s-line-o" d="M400 162 L430 240" marker-end="url(#arr26)"/>
+      <rect class="s-green" x="40" y="200" width="250" height="170" rx="8"/>
+      <text class="s-text-b" x="56" y="222">sub1 · 10.0.0.0/24</text>
+      <text class="s-text-s" x="56" y="240">us-east-1a · public</text>
+      <rect class="s-box" x="90" y="250" width="160" height="60" rx="6"/>
+      <text class="s-text-b" x="170" y="276" text-anchor="middle">webserver1</text>
+      <text class="s-text-s" x="170" y="296" text-anchor="middle">t2.micro + userdata.sh</text>
+      <rect class="s-green" x="300" y="200" width="250" height="170" rx="8"/>
+      <text class="s-text-b" x="316" y="222">sub2 · 10.0.1.0/24</text>
+      <text class="s-text-s" x="316" y="240">us-east-1b · public</text>
+      <rect class="s-box" x="350" y="250" width="160" height="60" rx="6"/>
+      <text class="s-text-b" x="430" y="276" text-anchor="middle">webserver2</text>
+      <text class="s-text-s" x="430" y="296" text-anchor="middle">t2.micro + userdata1.sh</text>
+      <text class="s-text-s" x="295" y="345" text-anchor="middle">Route table (0.0.0.0/0 → IGW) associated with both subnets</text>
+      <text class="s-text-s" x="295" y="362" text-anchor="middle">Security group: allow 80 + 22 in, all out</text>
+      <rect class="s-blue" x="580" y="200" width="104" height="60" rx="8"/>
+      <text class="s-text-b" x="632" y="226" text-anchor="middle">S3 bucket</text>
+      <text class="s-text-s" x="632" y="246" text-anchor="middle">outside VPC</text>
+    </svg>
+    <figcaption>What the Terraform code creates. Every arrow and box here is its own resource in code.</figcaption>
+  </figure>
+
+  <div class="xref-box"><div>Need a refresher on the parts? Subnets, route tables and internet gateways: <a href="06-vpc.html">Lesson 6</a>. Security groups: <a href="07-security-groups-nacl.html">Lesson 7</a>. Load balancers, target groups and listeners: <a href="28-load-balancers.html">Lesson 28</a>.</div></div>
+
+  <h2>Step 1: provider and variables</h2>
+  <p>Copy the provider block from the Terraform Registry (click <i>Use provider</i> on the AWS provider page). The <code>terraform</code> block pins the provider version. It's also where you would later set a remote backend to keep state in S3.</p>
+<pre><code># provider.tf
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~&gt; 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+# variables.tf
+variable "cidr" {
+  default = "10.0.0.0/16"
+}</code></pre>
+  <p>Now run <code>terraform init</code>. It creates a hidden <code>.terraform</code> folder and a lock file. Leave those alone; you only edit the <code>.tf</code> files.</p>
+
+  <h2>Step 2: networking</h2>
+  <p>Splitting code across files (<code>provider.tf</code>, <code>variables.tf</code>, <code>main.tf</code>…) is good practice; Terraform reads every <code>.tf</code> file in the folder together.</p>
+<pre><code># main.tf
+resource "aws_vpc" "myvpc" {
+  cidr_block = var.cidr
+}
+
+resource "aws_subnet" "sub1" {
+  vpc_id                  = aws_vpc.myvpc.id
+  cidr_block              = "10.0.0.0/24"
+  availability_zone       = "us-east-1a"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_subnet" "sub2" {
+  vpc_id                  = aws_vpc.myvpc.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "us-east-1b"
+  map_public_ip_on_launch = true
+}
+
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.myvpc.id
+}
+
+resource "aws_route_table" "rt" {
+  vpc_id = aws_vpc.myvpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+}
+
+resource "aws_route_table_association" "rta1" {
+  subnet_id      = aws_subnet.sub1.id
+  route_table_id = aws_route_table.rt.id
+}
+
+resource "aws_route_table_association" "rta2" {
+  subnet_id      = aws_subnet.sub2.id
+  route_table_id = aws_route_table.rt.id
+}</code></pre>
+
+  <div class="callout analogy"><span class="callout-title">Think of it like…</span>Writing <code>aws_vpc.myvpc.id</code> is like writing "the ID of the VPC I named myvpc, whatever it turns out to be". The ID doesn't exist yet, so Terraform learns it must create the VPC <i>first</i>. These references are how Terraform works out the build order on its own.</div>
+
+  <p>Read the docs to see what each argument expects. Most want <code>.id</code>, but some (like target groups and listeners) want <code>.arn</code>. Some take a single string, others a list in <code>[ ]</code>.</p>
+  <p>Run <code>terraform validate</code>, then <code>terraform plan</code>. It should say <b>7 to add</b>: the VPC, two subnets, the internet gateway, the route table and two associations. Then run <code>terraform apply</code> and type <code>yes</code>.</p>
+
+  <h2>Step 3: security group, S3 bucket and web servers</h2>
+<pre><code>resource "aws_security_group" "webSg" {
+  name   = "web"
+  vpc_id = aws_vpc.myvpc.id
+
+  ingress {
+    description = "HTTP from anywhere"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_s3_bucket" "example" {
+  bucket = "my-unique-terraform-project-bucket-2023"   # must be globally unique
+}
+
+resource "aws_instance" "webserver1" {
+  ami                    = "ami-xxxxxxxxxxxxxxxxx"   # Ubuntu AMI id from YOUR region
+  instance_type          = "t2.micro"
+  vpc_security_group_ids = [aws_security_group.webSg.id]
+  subnet_id              = aws_subnet.sub1.id
+  user_data              = base64encode(file("userdata.sh"))
+}
+
+resource "aws_instance" "webserver2" {
+  ami                    = "ami-xxxxxxxxxxxxxxxxx"
+  instance_type          = "t2.micro"
+  vpc_security_group_ids = [aws_security_group.webSg.id]
+  subnet_id              = aws_subnet.sub2.id
+  user_data              = base64encode(file("userdata1.sh"))
+}</code></pre>
+  <ul>
+    <li><b>Ingress</b> = inbound rules, <b>egress</b> = outbound. <code>protocol = "-1"</code> means all protocols.</li>
+    <li><b>AMI IDs differ per region.</b> Copy one from the EC2 launch page in your region, or look it up with a <code>data "aws_ami"</code> block.</li>
+    <li><b>User data</b> is a start-up script that runs on first boot. Keeping it in its own <code>.sh</code> file keeps <code>main.tf</code> short. <code>file()</code> reads the file; <code>base64encode()</code> encodes it the way the user-data field expects.</li>
+  </ul>
+  <p>Each script installs Apache and writes a small page. The two scripts print different text, so you can see the load balancer switching between servers later:</p>
+<pre><code>#!/bin/bash
+apt update
+apt install -y apache2
+# Ask the instance metadata service for this server's ID
+INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+cat &lt;&lt;EOF &gt; /var/www/html/index.html
+&lt;h1&gt;Terraform Project Server 1&lt;/h1&gt;
+&lt;p&gt;Instance ID: $INSTANCE_ID&lt;/p&gt;
+EOF
+systemctl start apache2
+systemctl enable apache2</code></pre>
+  <div class="callout"><span class="callout-title">Note</span><code>169.254.169.254</code> is the <b>instance metadata</b> address. From inside any EC2 instance you can call it to learn the instance's ID, IP, region and more. Newer instances may require IMDSv2, which needs a session token first. If the ID shows up blank, that's why.</div>
+  <div class="callout tip"><span class="callout-title">Tip</span>User data errors are silent: the script runs in the background and you won't see the error in Terraform. Test the script on a Linux machine first. You can check what an instance received under <i>Actions → Instance settings → Edit user data</i>.</div>
+
+  <h2>Step 4: the load balancer</h2>
+  <p>In the console, one wizard creates the load balancer, target group and listener together. In Terraform each is a separate resource, and you have to connect them yourself:</p>
+<pre><code>resource "aws_lb" "myalb" {
+  name               = "myalb"
+  internal           = false              # internet-facing
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.webSg.id]
+  subnets            = [aws_subnet.sub1.id, aws_subnet.sub2.id]
+  tags = {
+    Name = "web"
+  }
+}
+
+resource "aws_lb_target_group" "tg" {
+  name     = "myTG"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.myvpc.id
+  health_check {
+    path = "/"
+    port = "traffic-port"
+  }
+}
+
+resource "aws_lb_target_group_attachment" "attach1" {
+  target_group_arn = aws_lb_target_group.tg.arn
+  target_id        = aws_instance.webserver1.id
+  port             = 80
+}
+
+resource "aws_lb_target_group_attachment" "attach2" {
+  target_group_arn = aws_lb_target_group.tg.arn
+  target_id        = aws_instance.webserver2.id
+  port             = 80
+}
+
+resource "aws_lb_listener" "listener" {
+  load_balancer_arn = aws_lb.myalb.arn
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.tg.arn
+  }
+}
+
+output "loadbalancerdns" {
+  value = aws_lb.myalb.dns_name
+}</code></pre>
+  <ul>
+    <li>The <b>target group</b> holds the servers and health-checks them on <code>/</code>. Unhealthy servers get no traffic.</li>
+    <li>The <b>attachments</b> put each instance into the target group. With many servers you'd use <code>count</code> or <code>for_each</code> instead of copying the block.</li>
+    <li>Without the <b>listener</b>, the load balancer and target group exist but aren't connected, and you get no response.</li>
+    <li>The <b>output</b> prints the DNS name at the end of <code>apply</code>. Open it in a browser and refresh: the page switches between server 1 and server 2.</li>
+    <li>Wait until the load balancer is <i>Active</i> and both targets are <i>Healthy</i>. This can take a few minutes.</li>
+  </ul>
+  <div class="callout tip"><span class="callout-title">Better security</span>For simplicity, the load balancer and instances share one security group here. In real work, give the load balancer its own group and let the instances accept port 80 <i>only</i> from that group.</div>
+
+  <h2>Common errors (and how to fix them)</h2>
+  <div class="table-wrap"><table>
+    <tr><th>Error</th><th>Cause</th></tr>
+    <tr><td><i>Duplicate resource … already declared</i></td><td>You copied a block and forgot to change its local name (e.g. two <code>rta1</code> or two <code>attach1</code>).</td></tr>
+    <tr><td><i>Reference to undeclared resource</i></td><td>A reference points to a name that doesn't exist, often left over from code pasted from an older project.</td></tr>
+    <tr><td><i>Unsupported block type "tags"</i></td><td><code>tags</code> is an argument, so it needs an equals sign: <code>tags = { … }</code>.</td></tr>
+    <tr><td>Plan doesn't show your change</td><td>The file wasn't saved. Terraform reads the files on disk.</td></tr>
+    <tr><td>Access denied on apply</td><td>The IAM user lacks permissions for that service.</td></tr>
+  </table></div>
+  <p>Errors are normal, even for engineers with years of experience. Read the message, find the line, check the docs. Fixing them yourself teaches you more than copying a working repo.</p>
+
+  <h2>Finishing up</h2>
+  <ul>
+    <li>Add a <code>.gitignore</code> with <code>.terraform/</code>, <code>*.tfstate</code> and <code>*.tfstate.backup</code> before pushing code to GitHub.</li>
+    <li>Run <code>terraform destroy</code> when done. The load balancer costs money even when idle.</li>
+    <li><b>Challenge:</b> add an IAM role and instance profile so the servers can read from the S3 bucket (roles are covered in <a href="03-iam.html">Lesson 3</a>).</li>
+    <li>Next steps: modules and remote state in S3 with DynamoDB locking are covered in <a href="34-eks-terraform.html">Lesson 34</a>.</li>
+  </ul>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"Walk me through a Terraform project" is common. Explain the order: provider → network (VPC, subnets, IGW, route table, associations) → security group → compute (EC2 + user data) → load balancer (LB, target group, attachments, listener) → output. Then mention init/plan/apply, state hygiene (not in Git, remote backend) and how references create dependencies.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="2">
+    <div class="q">What does <code>terraform plan</code> do?</div>
+    <div class="opts"><button>Downloads the provider plugins</button><button>Creates the resources without asking</button><button>Compares code with state and shows what would change, without changing anything</button><button>Deletes all resources</button></div>
+    <div class="explain"><code>plan</code> is a dry run. <code>init</code> downloads providers, <code>apply</code> makes changes, <code>destroy</code> deletes.</div>
+  </div>
+  <div class="quiz" data-answer="1">
+    <div class="q">You wrote <code>subnet_id = aws_subnet.sub1.id</code> in an EC2 resource. What else does this do?</div>
+    <div class="opts"><button>Nothing; it's just a string</button><button>Tells Terraform to create the subnet before the instance</button><button>Creates a second subnet</button></div>
+    <div class="explain">A reference creates an implicit dependency. Terraform builds a graph from them and creates resources in the right order.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Your ALB and target group were created, but the browser gets no response from the ALB. What is most likely missing?</div>
+    <div class="opts"><button>An <code>aws_lb_listener</code> that forwards to the target group</button><button>A second VPC</button><button>The S3 bucket</button></div>
+    <div class="explain">The listener connects the load balancer to the target group. Also check that both targets show as healthy.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li>Terraform describes infrastructure in <code>.tf</code> files: a <b>provider</b> (AWS) plus <b>resources</b>, <b>variables</b> and <b>outputs</b>.</li>
+      <li>The workflow is <code>init → validate/fmt → plan → apply</code>, and <code>destroy</code> to clean up.</li>
+      <li>The <b>state file</b> is Terraform's memory of what exists. Keep it out of Git.</li>
+      <li>References like <code>aws_vpc.myvpc.id</code> wire resources together and set the build order.</li>
+      <li>Things the console does for you in one wizard (route table associations, target groups, listeners) are separate resources in code.</li>
+      <li>Know how to build it in the console first, keep the docs open, and treat errors as part of learning.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var rows = document.getElementById("tf-rows");
+  var out = document.getElementById("tf-out");
+  // Each resource: address, deps, optional editable attribute
+  var R = [
+    { id: "aws_vpc.myvpc", deps: [], attr: "cidr_block", opts: ["10.0.0.0/16", "10.1.0.0/16"], forceNew: true },
+    { id: "aws_subnet.sub1", deps: ["aws_vpc.myvpc"] },
+    { id: "aws_subnet.sub2", deps: ["aws_vpc.myvpc"] },
+    { id: "aws_internet_gateway.igw", deps: ["aws_vpc.myvpc"] },
+    { id: "aws_instance.webserver1", deps: ["aws_subnet.sub1"], attr: "instance_type", opts: ["t2.micro", "t3.small"], forceNew: false },
+    { id: "aws_s3_bucket.example", deps: [] },
+    { id: "aws_lb.myalb", deps: ["aws_subnet.sub1", "aws_subnet.sub2"] }
+  ];
+  var code = {}, state = {};
+  R.forEach(function (r, i) { code[r.id] = { on: i < 4, val: r.opts ? r.opts[0] : null }; });
+
+  function sCell(r) {
+    var s = state[r.id];
+    return s ? ("in state" + (r.attr ? " (" + s.val + ")" : "")) : "not created";
+  }
+  function draw() {
+    rows.innerHTML = "";
+    R.forEach(function (r) {
+      var d = document.createElement("div");
+      d.style.cssText = "display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface)";
+      var lab = document.createElement("label");
+      lab.style.cssText = "display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:13px;flex:1 1 200px;min-width:0;word-break:break-all";
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = code[r.id].on;
+      cb.addEventListener("change", function () { code[r.id].on = cb.checked; });
+      lab.appendChild(cb); lab.appendChild(document.createTextNode(r.id));
+      d.appendChild(lab);
+      if (r.attr) {
+        var sel = document.createElement("select");
+        sel.setAttribute("aria-label", r.attr + " for " + r.id);
+        r.opts.forEach(function (o) { var op = document.createElement("option"); op.textContent = o; if (o === code[r.id].val) op.selected = true; sel.appendChild(op); });
+        sel.addEventListener("change", function () { code[r.id].val = sel.value; });
+        d.appendChild(sel);
+      }
+      var st = document.createElement("span");
+      st.style.cssText = "font-size:12px;color:" + (state[r.id] ? "var(--green)" : "var(--text-2)");
+      st.textContent = "state: " + sCell(r);
+      d.appendChild(st);
+      rows.appendChild(d);
+    });
+  }
+  function check() {
+    var errs = [];
+    R.forEach(function (r) {
+      if (!code[r.id].on) return;
+      r.deps.forEach(function (dp) { if (!code[dp].on) errs.push("Error: Reference to undeclared resource\n  " + r.id + " refers to " + dp + ", which is not in the code."); });
+    });
+    return errs;
+  }
+  function plan() {
+    var add = [], chg = [], rep = [], del = [];
+    R.forEach(function (r) {
+      var c = code[r.id], s = state[r.id];
+      if (c.on && !s) add.push(r);
+      else if (!c.on && s) del.push(r);
+      else if (c.on && s && r.attr && c.val !== s.val) (r.forceNew ? rep : chg).push(r);
+    });
+    // a replaced parent forces its dependents to be replaced too (simplified)
+    var replacedIds = rep.map(function (r) { return r.id; });
+    R.forEach(function (r) {
+      if (code[r.id].on && state[r.id] && rep.indexOf(r) < 0 && chg.indexOf(r) < 0 &&
+          r.deps.some(function (d) { return replacedIds.indexOf(d) >= 0; })) { rep.push(r); replacedIds.push(r.id); }
+    });
+    return { add: add, chg: chg, rep: rep, del: del };
+  }
+  function render(p) {
+    var lines = [];
+    p.add.forEach(function (r) { lines.push("  + " + r.id + " will be created"); });
+    p.chg.forEach(function (r) { lines.push("  ~ " + r.id + " will be updated in-place\n      ~ " + r.attr + ": \"" + state[r.id].val + "\" -> \"" + code[r.id].val + "\""); });
+    p.rep.forEach(function (r) { lines.push("-/+ " + r.id + " must be replaced" + (r.attr && code[r.id].val !== state[r.id].val ? "\n      ~ " + r.attr + ": \"" + state[r.id].val + "\" -> \"" + code[r.id].val + "\" # forces replacement" : "\n      (depends on a resource being replaced)")); });
+    p.del.forEach(function (r) { lines.push("  - " + r.id + " will be destroyed"); });
+    var n = p.add.length + p.rep.length, d = p.del.length + p.rep.length;
+    if (!lines.length) return "No changes. Your infrastructure matches the configuration.";
+    return lines.join("\n") + "\n\nPlan: " + n + " to add, " + p.chg.length + " to change, " + d + " to destroy.";
+  }
+  function show(text, cls) { out.textContent = text; out.className = "output" + (cls ? " " + cls : ""); }
+
+  document.getElementById("tf-plan").addEventListener("click", function () {
+    var e = check(); if (e.length) return show(e.join("\n\n"), "bad");
+    show("$ terraform plan\n\n" + render(plan()));
+  });
+  document.getElementById("tf-apply").addEventListener("click", function () {
+    var e = check(); if (e.length) return show(e.join("\n\n"), "bad");
+    var p = plan(), txt = render(p);
+    if (/^No changes/.test(txt)) return show("$ terraform apply\n\n" + txt, "ok");
+    R.forEach(function (r) {
+      if (code[r.id].on) state[r.id] = { val: code[r.id].val }; else delete state[r.id];
+    });
+    show("$ terraform apply -auto-approve\n\n" + txt + "\n\nApply complete! State updated.", "ok");
+    draw();
+  });
+  document.getElementById("tf-destroy").addEventListener("click", function () {
+    var ids = Object.keys(state);
+    if (!ids.length) return show("$ terraform destroy\n\nNo objects need to be destroyed.");
+    state = {};
+    show("$ terraform destroy -auto-approve\n\n" + ids.map(function (i) { return "  - " + i + " destroyed"; }).join("\n") + "\n\nDestroy complete! Resources: " + ids.length + " destroyed.", "ok");
+    draw();
+  });
+  draw();
+})();
+</script>
+</body>
+</html>

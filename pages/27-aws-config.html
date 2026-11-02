@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWS Config: Compliance Checks · AWS Simplified</title>
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js"></script>
+</head>
+<body data-page="27">
+<main class="wrap">
+  <header class="page-head">
+    <h1>AWS Config: Compliance Checks</h1>
+    <p class="lead">Companies have rules about how cloud resources must be set up. AWS Config watches your resources and flags which ones follow those rules and which don't. You'll learn the idea of compliance, managed vs custom rules, and how to write a custom rule backed by a Lambda function.</p>
+  </header>
+
+  <h2>Start with a story</h2>
+  <p>Your company has a rule: <b>every EC2 instance must have detailed monitoring turned on</b>. Detailed monitoring sends metrics every minute instead of every five, which helps the team spot security or application problems quickly.</p>
+  <p>Now picture an account with thousands of instances, created by many developers and DevOps engineers. Some will forget the checkbox. Who notices? Checking by hand doesn't scale. That's the problem AWS Config solves.</p>
+
+  <h2>What is compliance?</h2>
+  <p><b>Compliance</b> means your resources follow your organisation's rules. A resource that follows them is <b>compliant</b>; one that breaks them is <b>non-compliant</b>.</p>
+  <p>Every organisation has different rules, depending on its industry. A bank, a government project and a startup will care about very different things. Some examples:</p>
+  <ul>
+    <li>Every EC2 instance must have detailed monitoring enabled.</li>
+    <li>No S3 bucket may allow public access.</li>
+    <li>Every S3 bucket must have a lifecycle policy.</li>
+    <li>Every resource must carry an <code>owner</code> tag.</li>
+  </ul>
+  <p>As a DevOps engineer, you don't invent these rules. Ask your manager or security team for the list of mandatory checks, then turn each one into a Config rule. Compliance is part of security, so companies treat it as a high priority.</p>
+
+  <h2>What AWS Config does</h2>
+  <p>In the console, Config is described as <i>"track resource inventory and changes"</i>. It does three things:</p>
+  <ol class="steps">
+    <li><b>Records</b> the configuration of your resources (what exists and how it's set up), and each time that configuration changes.</li>
+    <li><b>Evaluates</b> each resource against your <b>rules</b>.</li>
+    <li><b>Shows</b> a dashboard of compliant and non-compliant resources, per rule and per resource.</li>
+  </ol>
+  <div class="callout"><span class="callout-title">Note</span>Config has to be switched on first: you set up a <i>recorder</i> (which resource types to track) and a place, usually an S3 bucket, where it delivers configuration history. Config also has its own charges per item recorded and per rule check, so watch the bill on large accounts.</div>
+
+  <h2>Two kinds of rules</h2>
+  <div class="grid-2">
+    <div class="card"><h3>AWS managed rules</h3><p>Ready-made rules written by AWS: pick one from the list, fill in a few settings, done. Examples: <code>s3-bucket-public-read-prohibited</code>, <code>required-tags</code>, <code>ec2-instance-detailed-monitoring-enabled</code>. Always check this list first.</p></div>
+    <div class="card"><h3>Custom rules</h3><p>For checks AWS doesn't provide. You write the logic yourself, most often as a <b>Lambda function</b> (a "custom Lambda rule"). The console also offers custom rules written in Guard, a policy language. This lesson focuses on Lambda.</p></div>
+  </div>
+  <p>A rule runs on one of two kinds of <b>trigger</b>:</p>
+  <ul>
+    <li><b>Configuration changes</b>: runs whenever a matching resource is created, changed or deleted. Results update within minutes.</li>
+    <li><b>Periodic</b>: runs on a schedule, like a cron job (for example every 24 hours).</li>
+  </ul>
+
+  <h2>How a custom Lambda rule works</h2>
+  <figure class="diagram">
+    <svg viewBox="0 0 700 250" role="img" aria-label="Flow: an EC2 instance changes, AWS Config records it and invokes a Lambda function, which reads the instance details and reports compliant or non-compliant back to Config, which shows it on the dashboard">
+      <defs><marker id="arr27" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" style="fill:var(--text-2)"/></marker></defs>
+      <rect class="s-box" x="16" y="40" width="140" height="64" rx="8"/>
+      <text class="s-text-b" x="86" y="68" text-anchor="middle">EC2 instance</text>
+      <text class="s-text-s" x="86" y="88" text-anchor="middle">monitoring changed</text>
+      <path class="s-line" d="M156 72 H230" marker-end="url(#arr27)"/>
+      <text class="s-text-s" x="193" y="62" text-anchor="middle">1 change</text>
+      <rect class="s-orange" x="234" y="36" width="180" height="72" rx="8"/>
+      <text class="s-text-ink" x="324" y="66" text-anchor="middle">AWS Config</text>
+      <text class="s-text-ink" x="324" y="88" text-anchor="middle" style="font-weight:400">rule: test-demo</text>
+      <path class="s-line" d="M414 60 H500" marker-end="url(#arr27)"/>
+      <text class="s-text-s" x="457" y="50" text-anchor="middle">2 invoke + JSON</text>
+      <rect class="s-purple" x="504" y="36" width="180" height="72" rx="8"/>
+      <text class="s-text-b" x="594" y="66" text-anchor="middle">Lambda function</text>
+      <text class="s-text-s" x="594" y="88" text-anchor="middle">your check logic</text>
+      <path class="s-line" d="M594 108 V150 H86 V108" marker-end="url(#arr27)"/>
+      <text class="s-text-s" x="96" y="168">3 describe_instances</text>
+      <path class="s-line-o" d="M540 108 C520 130 440 120 414 96" marker-end="url(#arr27)"/>
+      <text class="s-text-s" x="480" y="128" text-anchor="middle">4 put_evaluations</text>
+      <rect class="s-green" x="170" y="180" width="160" height="50" rx="8"/>
+      <text class="s-text-b" x="250" y="210" text-anchor="middle">COMPLIANT</text>
+      <rect class="s-red" x="370" y="180" width="160" height="50" rx="8"/>
+      <text class="s-text-b" x="450" y="210" text-anchor="middle">NON_COMPLIANT</text>
+      <path class="s-line" d="M350 108 V172" marker-end="url(#arr27)"/>
+      <text class="s-text-s" x="20" y="240">5 shown on the Config dashboard</text>
+    </svg>
+    <figcaption>Config detects the change and calls your Lambda, which does the actual check and reports the result back.</figcaption>
+  </figure>
+  <p>Lambda functions are <b>event-driven</b>: something has to invoke them. Here, Config is the caller. It passes the function a JSON event describing the resource that changed. The function checks that resource and sends back a verdict. See <a href="19-lambda.html">Lesson 19: Lambda</a> for the basics.</p>
+
+  <h2>Build it step by step</h2>
+  <ol class="steps">
+    <li><b>Create the Lambda function first</b> (Python runtime, default execution role is fine). You need its ARN before you can create the rule.</li>
+    <li><b>Give the function's IAM role permissions</b> to read EC2 (<code>ec2:DescribeInstances</code>), report to Config (<code>config:PutEvaluations</code>) and write CloudWatch logs. For a first demo, broad policies such as EC2 full access, CloudWatch full access and the <code>AWS_ConfigRole</code> managed policy get you going. Then trim them down to least privilege (<a href="03-iam.html">Lesson 3</a>).</li>
+    <li><b>Paste the code</b> below and deploy.</li>
+    <li>In <b>Config → Rules → Add rule</b>, choose <i>Create custom Lambda rule</i>, give it a name (e.g. <code>test-demo</code>) and paste the Lambda ARN.</li>
+    <li>Set the trigger to <b>When configuration changes</b>, scope = resources, resource type = <code>AWS::EC2::Instance</code>. Leave the resource ID blank to watch all instances.</li>
+    <li>Save. Config runs the first check and fills in the dashboard.</li>
+  </ol>
+
+  <h2>The Lambda code</h2>
+  <p>The function is written in Python with <b>boto3</b>, the AWS SDK for Python. It talks to EC2 and Config. The entry point is <code>lambda_handler</code>, which is like <code>main</code> in other languages.</p>
+<pre><code>import json
+import boto3
+
+ec2 = boto3.client("ec2")
+config = boto3.client("config")
+
+def lambda_handler(event, context):
+    # Config sends the changed resource as a JSON string inside the event
+    invoking_event = json.loads(event["invokingEvent"])
+    item = invoking_event["configurationItem"]
+    instance_id = item["resourceId"]
+
+    compliance = "COMPLIANT"            # assume good until proven otherwise
+
+    if item["configurationItemStatus"] == "ResourceDeleted":
+        compliance = "NOT_APPLICABLE"
+    else:
+        resp = ec2.describe_instances(InstanceIds=[instance_id])
+        instance = resp["Reservations"][0]["Instances"][0]
+        if instance["Monitoring"]["State"] != "enabled":
+            compliance = "NON_COMPLIANT"
+
+    # Report the verdict back to AWS Config
+    config.put_evaluations(
+        Evaluations=[{
+            "ComplianceResourceType": item["resourceType"],
+            "ComplianceResourceId": instance_id,
+            "ComplianceType": compliance,
+            "OrderingTimestamp": item["configurationItemCaptureTime"],
+        }],
+        ResultToken=event["resultToken"],
+    )
+    return {"compliance": compliance}</code></pre>
+  <ul>
+    <li><code>invokingEvent</code> holds the resource's configuration. <code>resultToken</code> tells Config which evaluation run this answer belongs to.</li>
+    <li>The function assumes "compliant", then flips to "non-compliant" if monitoring isn't <code>enabled</code>.</li>
+    <li>You don't need to memorise boto3. Everyone, experienced engineers included, writes this kind of code with the boto3 documentation open.</li>
+  </ul>
+
+  <div class="demo" id="demo-cfg">
+    <div class="demo-head">Try it: compliance checker</div>
+    <div class="demo-body">
+      <p>Choose which rules are active, then change the resources' settings. Each resource is checked against every active rule that applies to its type, the same way Config evaluates them.</p>
+      <div class="row" id="cfg-rules"></div>
+      <div id="cfg-res" style="display:grid;gap:8px;margin:12px 0"></div>
+      <div class="output" id="cfg-out"></div>
+    </div>
+  </div>
+
+  <h2>Troubleshooting: when the dashboard doesn't update</h2>
+  <p>Config, Lambda and EC2 are separate services, so results can take a few minutes. If nothing changes:</p>
+  <ol class="steps">
+    <li>Check the rule's <b>last successful evaluation</b> time. If it's old, the rule hasn't run yet.</li>
+    <li>Open <b>CloudWatch → Log groups</b> and find the function's log group (<code>/aws/lambda/&lt;name&gt;</code>). Read the latest log stream. See <a href="18-cloudwatch.html">Lesson 18</a>.</li>
+    <li>A common error is <i>"Task timed out after 3.0 seconds"</i>. Lambda's default timeout is <b>3 seconds</b>, and a cold start plus two API calls can exceed it. Raise it under <i>Configuration → General configuration</i> (10 seconds is plenty).</li>
+    <li>Back in Config, choose <b>Actions → Re-evaluate</b> to run the rule again right away.</li>
+  </ol>
+  <div class="callout tip"><span class="callout-title">Tip</span>Be patient. Even when everything is correct, a change can take 2–3 minutes or more to appear on the dashboard.</div>
+
+  <h2>Practice: do the same for S3</h2>
+  <p>Once the EC2 rule works, create a second rule with resource type <code>AWS::S3::Bucket</code>. Write a function that marks a bucket non-compliant if public access isn't blocked. Bucket settings are explained in <a href="11-s3.html">Lesson 11: S3</a>.</p>
+
+  <div class="callout interview"><span class="callout-title">Interview angle</span>"How do you make sure resources follow company policy?" Answer: collect the mandatory rules from security/management, use AWS Config managed rules where they exist, write custom Lambda rules for the rest, trigger on configuration change, and review the compliance dashboard (and alert on it). Mentioning a concrete example like EC2 detailed monitoring makes the answer sound real.</div>
+
+  <h2>Check yourself</h2>
+  <div class="quiz" data-answer="1">
+    <div class="q">Your rule needs a check that no AWS managed rule offers. What do you create?</div>
+    <div class="opts"><button>A CloudFront distribution</button><button>A custom rule backed by a Lambda function</button><button>A new IAM user</button></div>
+    <div class="explain">Custom Lambda rules let you write any check you need. Config invokes the function and the function reports the result with <code>put_evaluations</code>.</div>
+  </div>
+  <div class="quiz" data-answer="2">
+    <div class="q">Your rule never updates and the Lambda log says "Task timed out after 3.0 seconds". What's the fix?</div>
+    <div class="opts"><button>Delete the Config recorder</button><button>Switch the trigger to periodic</button><button>Increase the Lambda function's timeout</button></div>
+    <div class="explain">Lambda's default timeout is 3 seconds. Raise it, then use <i>Re-evaluate</i> on the rule.</div>
+  </div>
+  <div class="quiz" data-answer="0">
+    <div class="q">Which trigger updates compliance soon after someone edits an instance?</div>
+    <div class="opts"><button>Configuration changes</button><button>Periodic, every 24 hours</button><button>Manual only</button></div>
+    <div class="explain">Change-triggered rules run when a matching resource is created, modified or deleted. Periodic rules wait for the schedule.</div>
+  </div>
+
+  <section class="takeaways">
+    <h2>Key takeaways</h2>
+    <ul>
+      <li><b>Compliance</b> = resources follow your organisation's rules. Config labels each resource COMPLIANT or NON_COMPLIANT.</li>
+      <li>AWS Config records resource configurations and their changes, and evaluates them against <b>rules</b>.</li>
+      <li>Use <b>managed rules</b> when AWS already has the check; write <b>custom Lambda rules</b> for everything else.</li>
+      <li>A rule triggers on <b>configuration changes</b> or <b>periodically</b>.</li>
+      <li>The Lambda reads the event, checks the resource with boto3, and reports back with <code>put_evaluations</code>. Its role needs the matching permissions.</li>
+      <li>Debug with CloudWatch Logs; watch the 3-second default Lambda timeout.</li>
+    </ul>
+  </section>
+</main>
+<script>
+(function () {
+  var RULES = [
+    { id: "mon", name: "ec2-detailed-monitoring", type: "EC2", on: true, test: function (r) { return r.monitoring; }, why: "detailed monitoring is off" },
+    { id: "pub", name: "s3-public-access-blocked", type: "S3", on: true, test: function (r) { return r.blockPublic; }, why: "public access is not blocked" },
+    { id: "tag", name: "required-tags (owner)", type: "ALL", on: false, test: function (r) { return r.ownerTag; }, why: "missing the owner tag" }
+  ];
+  var RES = [
+    { name: "i-0a1 web-server", type: "EC2", monitoring: true, ownerTag: true },
+    { name: "i-0b2 batch-job", type: "EC2", monitoring: false, ownerTag: false },
+    { name: "logs-bucket", type: "S3", blockPublic: true, ownerTag: true },
+    { name: "marketing-site", type: "S3", blockPublic: false, ownerTag: true }
+  ];
+  var rulesBox = document.getElementById("cfg-rules");
+  var resBox = document.getElementById("cfg-res");
+  var out = document.getElementById("cfg-out");
+
+  RULES.forEach(function (rule) {
+    var b = document.createElement("button");
+    b.className = "btn"; b.type = "button";
+    b.textContent = "Rule: " + rule.name;
+    b.setAttribute("aria-pressed", rule.on ? "true" : "false");
+    b.addEventListener("click", function () { rule.on = !rule.on; b.setAttribute("aria-pressed", rule.on ? "true" : "false"); evaluate(); });
+    rulesBox.appendChild(b);
+  });
+
+  function toggle(label, obj, key) {
+    var l = document.createElement("label");
+    l.style.cssText = "display:inline-flex;gap:6px;align-items:center;font-size:13px;margin-right:10px";
+    var c = document.createElement("input"); c.type = "checkbox"; c.checked = obj[key];
+    c.addEventListener("change", function () { obj[key] = c.checked; evaluate(); });
+    l.appendChild(c); l.appendChild(document.createTextNode(label));
+    return l;
+  }
+  var badges = [];
+  RES.forEach(function (r, i) {
+    var d = document.createElement("div");
+    d.style.cssText = "padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface)";
+    var top = document.createElement("div");
+    top.style.cssText = "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px";
+    var n = document.createElement("b"); n.style.fontSize = "14px"; n.textContent = (r.type === "EC2" ? "EC2 " : "S3 ") + r.name;
+    var badge = document.createElement("span");
+    badge.style.cssText = "font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px";
+    top.appendChild(n); top.appendChild(badge);
+    d.appendChild(top);
+    if (r.type === "EC2") d.appendChild(toggle("detailed monitoring", r, "monitoring"));
+    else d.appendChild(toggle("block public access", r, "blockPublic"));
+    d.appendChild(toggle("owner tag", r, "ownerTag"));
+    resBox.appendChild(d);
+    badges[i] = badge;
+  });
+
+  function evaluate() {
+    var ok = 0, bad = 0, lines = [];
+    RES.forEach(function (r, i) {
+      var applicable = RULES.filter(function (x) { return x.on && (x.type === "ALL" || x.type === r.type); });
+      var fails = applicable.filter(function (x) { return !x.test(r); });
+      var b = badges[i];
+      if (!applicable.length) {
+        b.textContent = "NOT_APPLICABLE"; b.style.background = "var(--surface-2)"; b.style.color = "var(--text-2)";
+      } else if (fails.length) {
+        bad++; b.textContent = "NON_COMPLIANT"; b.style.background = "var(--red-soft)"; b.style.color = "var(--red)";
+        lines.push(r.name + ": " + fails.map(function (f) { return f.why; }).join(", "));
+      } else {
+        ok++; b.textContent = "COMPLIANT"; b.style.background = "var(--green-soft)"; b.style.color = "var(--green)";
+      }
+    });
+    out.className = "output " + (bad ? "bad" : "ok");
+    out.textContent = "Dashboard: " + ok + " compliant, " + bad + " non-compliant." + (lines.length ? "\n" + lines.join("\n") : "\nEverything follows the active rules.");
+    out.style.whiteSpace = "pre-wrap";
+  }
+  evaluate();
+})();
+</script>
+</body>
+</html>
