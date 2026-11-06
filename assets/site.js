@@ -74,7 +74,12 @@
       '<header class="topbar"><div class="topbar-inner">' +
         '<a class="brand" href="' + base + 'index.html"><span class="brand-mark">AWS</span><span>Simplified</span></a>' +
         '<div class="crumb">' + crumb + '</div>' +
-        '<a class="tb-link" href="' + base + 'index.html">☰ All lessons</a>' +
+        '<div class="tb-search" role="search">' +
+          '<input type="search" placeholder="Search all lessons" aria-label="Search all lessons" autocomplete="off" spellcheck="false" role="combobox" aria-expanded="false" aria-controls="sr-panel">' +
+          '<kbd>/</kbd>' +
+          '<div class="sr-panel" id="sr-panel" role="listbox" hidden></div>' +
+        '</div>' +
+        '<a class="tb-link" href="' + base + 'index.html" aria-label="All lessons">☰<span class="tb-long"> All lessons</span></a>' +
         '<button id="theme-btn" type="button">' + (isDark() ? "☀ Light" : "☾ Dark") + '</button>' +
       '</div><div class="progress-bar"><span style="width:' + pct + '%"></span></div></header>'
     );
@@ -86,6 +91,19 @@
         '<p>Lessons were written by AI from transcripts of a <a href="https://www.youtube.com/playlist?list=PLdpzxOOAlwvLNOxX0RfndiYSt1Le9azze" target="_blank" rel="noopener noreferrer">40-video YouTube AWS series</a>. They may contain mistakes — always check the official AWS documentation before using anything in production.</p>' +
       '</footer>'
     );
+  }
+
+  function loadSearch(base) {
+    var s = document.createElement("script");
+    s.src = base + "assets/search.js";
+    s.setAttribute("data-base", base);
+    document.body.appendChild(s);
+  }
+
+  /* Search results link to "#s<i>". build_search_index.py uses the same numbers. */
+  function idHeadings() {
+    var hs = document.querySelectorAll("main h2");
+    Array.prototype.forEach.call(hs, function (h, i) { if (!h.id) h.id = "s" + (i + 1); });
   }
 
   function wireQuizzes(root) {
@@ -198,7 +216,8 @@
 
   document.addEventListener("DOMContentLoaded", function () {
     var n = parseInt(document.body.getAttribute("data-page"), 10);
-    if (n) initLesson(n); else if (document.body.hasAttribute("data-index")) initIndex();
+    if (n) { idHeadings(); initLesson(n); loadSearch("../"); }
+    else if (document.body.hasAttribute("data-index")) { initIndex(); loadSearch(""); }
     wireQuizzes(document);
     document.addEventListener("click", function (e) { if (e.target && e.target.id === "theme-btn") toggleTheme(); });
   });
