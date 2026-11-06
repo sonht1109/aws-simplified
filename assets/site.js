@@ -87,7 +87,7 @@
   function footer() {
     return el(
       '<footer class="site-footer">' +
-        '<p><span class="ai-note">🤖 This content is AI-generated</span></p>' +
+        '<p><span class="ai-note">This content is AI-generated</span></p>' +
         '<p>Lessons were written by AI from transcripts of a <a href="https://www.youtube.com/playlist?list=PLdpzxOOAlwvLNOxX0RfndiYSt1Le9azze" target="_blank" rel="noopener noreferrer">40-video YouTube AWS series</a>. They may contain mistakes — always check the official AWS documentation before using anything in production.</p>' +
       '</footer>'
     );
